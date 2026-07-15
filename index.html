@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Order Dashboard</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Section -->
+    <header class="dashboard-header">
+      <div class="header-title">
+        <h1>Order Dashboard</h1>
+        <p class="subtitle">Live updates from Google Sheet</p>
+      </div>
+      
+      <!-- Controls -->
+      <div class="controls-wrapper">
+        <div class="controls-top">
+          <div class="control-group">
+            <label for="search-input" id="label-search">ค้นหาสินค้า (Search)</label>
+            <input type="text" id="search-input" placeholder="พิมพ์เพื่อค้นหา...">
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="control-group toggle-group" style="margin-bottom: 0;">
+              <label class="toggle-switch">
+                <input type="checkbox" id="active-only-toggle" checked>
+                <span class="slider round"></span>
+              </label>
+              <span class="toggle-label">แสดงเฉพาะสินค้าที่มีออเดอร์</span>
+            </div>
+            
+            <div class="control-group toggle-group" style="margin-bottom: 0;">
+              <label class="toggle-switch">
+                <input type="checkbox" id="stock-only-toggle">
+                <span class="slider round"></span>
+              </label>
+              <span class="toggle-label">แสดงเฉพาะสินค้าที่มีสต็อก</span>
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <label for="category-filter-header">หมวดหมู่ (Category)</label>
+            <div class="multi-select-container" id="category-multi-select">
+              <div class="multi-select-header" id="category-filter-header">
+                ทั้งหมด (All Categories)
+              </div>
+              <div class="multi-select-options" id="category-filter-options">
+                <!-- Dynamically populated by JS -->
+              </div>
+            </div>
+          </div>
+          
+          <div class="control-group" style="margin-left: auto;">
+            <button id="presentation-btn" class="btn-primary">Presentation Mode</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Area -->
+    <main>
+      <div id="loading-spinner" class="loading">Loading data...</div>
+      <div id="dashboard-container" class="dashboard-grid">
+        <!-- Tables will be dynamically injected here by JS -->
+      </div>
+    </main>
+  </div>
+
+  <!-- App Logic & External Libs -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
