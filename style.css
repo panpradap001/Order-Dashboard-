@@ -34,10 +34,110 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: var(--surface-color);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background-color: var(--highlight-bg);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--bg-color);
+}
+
 .app-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
+}
+
+.store-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.store-card {
+  background-color: var(--surface-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.store-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-color);
+}
+
+.store-card h3 {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.store-card .store-stats {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
 /* Header Styles */
@@ -229,7 +329,7 @@ input:checked + .slider:before {
   color: var(--text-secondary);
 }
 
-.multi-select-options {
+.multi-select-options-wrapper {
   position: absolute;
   top: 100%;
   left: 0;
@@ -238,15 +338,40 @@ input:checked + .slider:before {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-top: 4px;
-  max-height: 250px;
-  overflow-y: auto;
   z-index: 100;
   display: none;
   box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
-.multi-select-options.show {
-  display: block;
+.multi-select-options-wrapper.show {
+  display: flex;
+  flex-direction: column;
+}
+
+.category-search-wrapper {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-color);
+}
+
+.category-search-wrapper input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.category-search-wrapper input:focus {
+  border-color: var(--accent-color);
+}
+
+.multi-select-options {
+  max-height: 250px;
+  overflow-y: auto;
 }
 
 .multi-select-option {
@@ -363,6 +488,7 @@ th {
   padding: 1rem 1.5rem;
   position: sticky;
   top: 0;
+  white-space: nowrap;
 }
 
 td {
@@ -399,11 +525,19 @@ tbody tr:hover {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--accent-hover);
   font-weight: 600;
   min-width: 2rem;
   text-align: center;
+}
+
+.order-badge.green {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+}
+
+.order-badge.red {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
 }
 
 /* No results state */
@@ -466,6 +600,14 @@ body.presentation-mode {
   background-color: var(--surface-color);
   height: 100vh;
   overflow: hidden;
+}
+
+body.presentation-mode .sidebar {
+  display: none;
+}
+
+body.presentation-mode .main-content {
+  padding: 0;
 }
 
 body.presentation-mode .dashboard-header {

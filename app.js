@@ -2,12 +2,17 @@ import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue } from "firebase/database";
 import Sortable from 'sortablejs';
 
+window.onerror = function(message, source, lineno, colno, error) {
+  alert("JS Error: " + message + " at " + lineno + ":" + colno);
+};
+
 // Configurable data keys in case the JSON structure changes in the future
 const DATA_KEYS = {
   category: 'หมวดหมู่',
-  productName: 'ชื่อสินค้า',
+  colorName: 'สี',
   stock: 'สต๊อก',
-  order: 'ออเดอร์'
+  order: 'ออเดอร์',
+  productCode: 'รหัสสินค้า'
 };
 
 const firebaseConfig = {
@@ -28,30 +33,40 @@ const database = getDatabase(app);
 // DOM Elements
 const dashboardContainer = document.getElementById('dashboard-container');
 const loadingSpinner = document.getElementById('loading-spinner');
-const searchInput = document.getElementById('search-input');
 const categoryMultiSelect = document.getElementById('category-multi-select');
 const categoryFilterHeader = document.getElementById('category-filter-header');
+const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+const categorySearch = document.getElementById('category-search');
 const categoryFilterOptions = document.getElementById('category-filter-options');
 const activeOnlyToggle = document.getElementById('active-only-toggle');
 const stockOnlyToggle = document.getElementById('stock-only-toggle');
 const presentationBtn = document.getElementById('presentation-btn');
+const storeListContainer = document.getElementById('store-list-container');
+const storeDetailContainer = document.getElementById('store-detail-container');
+const storeDetailTitle = document.getElementById('store-detail-title');
+const backToStoreListBtn = document.getElementById('back-to-store-list');
+const navItems = document.querySelectorAll('.nav-item');
+const viewSections = document.querySelectorAll('.view-section');
 
 // State
 let rawData = [];
 let groupedData = {};
+let storeRawData = [];
 let activeCategories = new Set();
-let currentSearch = '';
 let currentCategories = ['all'];
 let isPresentationMode = false;
 let showOnlyActive = true;
 let showOnlyStock = false;
 let customCategoryOrder = [];
+let storeSearchDebounceTimeout = null;
+let currentStoreDetailName = null;
 let sortableInstance = null;
 
 // Initialize
 function init() {
   setupEventListeners();
   fetchData();
+  fetchCustomerOrders();
 }
 
 // Fetch real-time data from Firebase
@@ -61,9 +76,25 @@ function fetchData() {
   
   onValue(ordersRef, (snapshot) => {
     const data = snapshot.val();
+    console.log("fetchData snapshot:", data);
     if (data) {
-      // Data might be an array or object depending on Firebase structure
-      rawData = Array.isArray(data) ? data : Object.values(data);
+      
+      let fetchedData = Array.isArray(data) ? data : Object.values(data);
+      fetchedData = fetchedData.filter(item => item !== null && typeof item === 'object');
+      
+      rawData = fetchedData.map(item => {
+        let newItem = { ...item }; 
+        
+        if (newItem[DATA_KEYS.productCode] && newItem[DATA_KEYS.category]) {
+          let shortCode = String(newItem[DATA_KEYS.productCode]).substring(0, 4);
+          
+          newItem[DATA_KEYS.category] = `${shortCode}\u00A0\u00A0\u00A0${newItem[DATA_KEYS.category]}`;
+          
+          delete newItem[DATA_KEYS.productCode]; 
+        }
+        
+        return newItem;
+      });
       
       // Initial population of filter dropdown (only once or when new categories appear)
       updateCategoryDropdown(rawData);
@@ -75,6 +106,27 @@ function fetchData() {
   }, (error) => {
     console.error("Firebase Read Error: ", error);
     loadingSpinner.textContent = "Error connecting to Firebase. Check console and configuration.";
+  });
+}
+
+// Fetch store data
+function fetchCustomerOrders() {
+  const customerOrdersRef = ref(database, 'orders/customerOrders');
+  
+  onValue(customerOrdersRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      let fetchedData = Array.isArray(data) ? data : Object.values(data);
+      storeRawData = fetchedData.filter(item => item !== null && typeof item === 'object');
+      renderStoreList();
+      
+      // Auto-update the detail view if it's currently open
+      if (currentStoreDetailName) {
+        renderStoreDetail(currentStoreDetailName);
+      }
+    }
+  }, (error) => {
+    console.error("Firebase Read Error (Store): ", error);
   });
 }
 
@@ -146,21 +198,19 @@ function updateMultiSelectHeader() {
 
 // Process and filter data before rendering
 function processData() {
-  const searchLower = currentSearch ? currentSearch.toLowerCase() : '';
   const hasCategoryFilter = !currentCategories.includes('all') && currentCategories.length > 0;
 
   // Single pass filtering for performance
   let processed = rawData.filter(item => {
     const orderCount = Number(item[DATA_KEYS.order]);
     const stockCount = Number(item[DATA_KEYS.stock]);
-    const hasRequiredFields = item[DATA_KEYS.category] && item[DATA_KEYS.productName];
+    const hasRequiredFields = item[DATA_KEYS.category] && item[DATA_KEYS.colorName];
     
     if (!hasRequiredFields) return false;
     
     if (showOnlyActive && (isNaN(orderCount) || orderCount <= 0)) return false;
     if (showOnlyStock && (isNaN(stockCount) || stockCount <= 0)) return false;
     
-    if (searchLower && !String(item[DATA_KEYS.productName]).toLowerCase().includes(searchLower)) return false;
     if (hasCategoryFilter && !currentCategories.includes(item[DATA_KEYS.category])) return false;
     
     return true;
@@ -242,7 +292,7 @@ function renderDashboard() {
     
     // Find all unique columns dynamically (excluding category)
     // Always include the core columns so they don't disappear if empty
-    const allColumns = new Set([DATA_KEYS.productName, DATA_KEYS.stock, DATA_KEYS.order]);
+    const allColumns = new Set([DATA_KEYS.colorName, DATA_KEYS.stock, DATA_KEYS.order]);
     group.items.forEach(item => {
       Object.keys(item).forEach(key => {
         if (key !== DATA_KEYS.category) {
@@ -256,7 +306,7 @@ function renderDashboard() {
     });
     
     // Order columns logically: product name first, order last, unknown columns in between
-    const knownFirst = [DATA_KEYS.productName, DATA_KEYS.order];
+    const knownFirst = [DATA_KEYS.colorName, DATA_KEYS.order];
     const knownLast = [DATA_KEYS.stock];
     const unknownColumns = Array.from(allColumns).filter(c => !knownFirst.includes(c) && !knownLast.includes(c));
     
@@ -270,7 +320,7 @@ function renderDashboard() {
     let theadHTML = '<tr>';
     finalColumns.forEach(col => {
       let colClass = '';
-      if (col === DATA_KEYS.productName) colClass = 'col-product';
+      if (col === DATA_KEYS.colorName) colClass = 'col-product';
       else if (col === DATA_KEYS.stock) colClass = 'col-stock';
       else if (col === DATA_KEYS.order) colClass = 'col-orders';
       
@@ -284,17 +334,21 @@ function renderDashboard() {
       tbodyHTML += '<tr>';
       finalColumns.forEach(col => {
         let colClass = '';
-        if (col === DATA_KEYS.productName) colClass = 'col-product';
+        if (col === DATA_KEYS.colorName) colClass = 'col-product';
         else if (col === DATA_KEYS.stock) colClass = 'col-stock';
         else if (col === DATA_KEYS.order) colClass = 'col-orders';
         
         let val = item[col] !== undefined ? String(item[col]) : '';
         
-        if (col === DATA_KEYS.order) {
-          tbodyHTML += `<td class="${colClass}"><span class="order-badge">${escapeHTML(val || '0')}</span></td>`;
+        if (col === DATA_KEYS.stock) {
+          let orderVal = Number(item[DATA_KEYS.order] || 0);
+          let stockVal = Number(val || 0);
+          let badgeColorClass = stockVal < orderVal ? 'red' : 'green';
+          
+          tbodyHTML += `<td class="${colClass}"><span class="order-badge ${badgeColorClass}">${escapeHTML(val || '0')}</span></td>`;
         } else {
-          // If value is empty, provide '0' for stock, else empty string
-          const defaultVal = col === DATA_KEYS.order ? '0' : '';
+          // If value is empty, provide '0' for order/stock, else empty string
+          const defaultVal = (col === DATA_KEYS.order || col === DATA_KEYS.stock) ? '0' : '';
           tbodyHTML += `<td class="${colClass}">${escapeHTML(val || defaultVal)}</td>`;
         }
       });
@@ -370,13 +424,64 @@ function adjustPresentationScale() {
 
 // Event Listeners for Filters
 function setupEventListeners() {
-  let searchTimeout;
-  searchInput.addEventListener('input', (e) => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      currentSearch = e.target.value.trim();
-      renderDashboard();
-    }, 300); // 300ms debounce
+  // View Routing
+  navItems.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      // Update active nav
+      navItems.forEach(n => n.classList.remove('active'));
+      const targetBtn = e.currentTarget;
+      targetBtn.classList.add('active');
+      
+      // Update views
+      const viewId = targetBtn.getAttribute('data-view');
+      viewSections.forEach(sec => sec.style.display = 'none');
+      
+      const targetView = document.getElementById(viewId);
+      if (targetView) targetView.style.display = 'block';
+      
+      if (viewId === 'view-store') {
+        document.getElementById('view-store-list').style.display = 'block';
+        document.getElementById('view-store-detail').style.display = 'none';
+        currentStoreDetailName = null;
+        renderStoreList();
+      }
+    });
+  });
+
+  // Back button in store detail
+  if (backToStoreListBtn) {
+    backToStoreListBtn.addEventListener('click', () => {
+      document.getElementById('view-store-list').style.display = 'block';
+      document.getElementById('view-store-detail').style.display = 'none';
+      currentStoreDetailName = null;
+    });
+  }
+
+  // Store List Search with Debounce
+  const storeSearchInput = document.getElementById('store-search');
+  if (storeSearchInput) {
+    storeSearchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase().trim();
+      
+      clearTimeout(storeSearchDebounceTimeout);
+      storeSearchDebounceTimeout = setTimeout(() => {
+        renderStoreList();
+      }, 300);
+    });
+  }
+
+  // Category dropdown search
+  categorySearch.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase().trim();
+    const labels = categoryFilterOptions.querySelectorAll('label');
+    labels.forEach(label => {
+      const text = label.textContent.toLowerCase();
+      if (text.includes(searchTerm)) {
+        label.style.display = 'flex';
+      } else {
+        label.style.display = 'none';
+      }
+    });
   });
 
   // Toggle Switch
@@ -402,13 +507,20 @@ function setupEventListeners() {
   });
 
   categoryFilterHeader.addEventListener('click', (e) => {
-    categoryFilterOptions.classList.toggle('show');
+    categoryFilterDropdown.classList.toggle('show');
+    // Clear search and reset filter options when opened
+    if (categoryFilterDropdown.classList.contains('show')) {
+      categorySearch.value = '';
+      const labels = categoryFilterOptions.querySelectorAll('label');
+      labels.forEach(label => label.style.display = 'flex');
+      setTimeout(() => categorySearch.focus(), 50);
+    }
     e.stopPropagation();
   });
 
   document.addEventListener('click', (e) => {
     if (!categoryMultiSelect.contains(e.target)) {
-      categoryFilterOptions.classList.remove('show');
+      categoryFilterDropdown.classList.remove('show');
     }
   });
 
@@ -499,15 +611,114 @@ function setupEventListeners() {
 
 // Utility to prevent XSS
 function escapeHTML(str) {
-  return str.replace(/[&<>'"]/g, 
-    tag => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      "'": '&#39;',
-      '"': '&quot;'
-    }[tag] || tag)
-  );
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Render Store List
+function renderStoreList() {
+  if (!storeListContainer) return;
+  
+  // Extract unique customer names
+  let uniqueCustomers = [...new Set(storeRawData.map(item => item['ชื่อลูกค้า']).filter(Boolean))];
+  
+  // Filter by search term if provided
+  const storeSearchInput = document.getElementById('store-search');
+  const searchTerm = storeSearchInput ? storeSearchInput.value.toLowerCase().trim() : '';
+  
+  if (searchTerm) {
+    uniqueCustomers = uniqueCustomers.filter(customer => 
+      customer.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  if (uniqueCustomers.length === 0) {
+    storeListContainer.innerHTML = `<div class="no-results"><p>ไม่พบข้อมูลร้านค้า</p></div>`;
+    return;
+  }
+
+  storeListContainer.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+
+  uniqueCustomers.forEach(customer => {
+    const card = document.createElement('div');
+    card.className = 'store-card';
+    
+    // Count orders for this customer
+    const customerOrders = storeRawData.filter(item => item['ชื่อลูกค้า'] === customer);
+    const totalItems = customerOrders.length;
+    
+    card.innerHTML = `
+      <h3>${escapeHTML(customer)}</h3>
+      <div class="store-stats">รายการสั่งซื้อ: ${totalItems} รายการ</div>
+    `;
+    
+    card.addEventListener('click', () => {
+      renderStoreDetail(customer);
+    });
+    
+    fragment.appendChild(card);
+  });
+  
+  storeListContainer.appendChild(fragment);
+}
+
+// Render Store Detail Table
+function renderStoreDetail(customerName) {
+  currentStoreDetailName = customerName;
+  
+  document.getElementById('view-store-list').style.display = 'none';
+  document.getElementById('view-store-detail').style.display = 'block';
+  
+  if (storeDetailTitle) storeDetailTitle.textContent = customerName;
+  
+  const customerOrders = storeRawData.filter(item => item['ชื่อลูกค้า'] === customerName);
+  
+  if (customerOrders.length === 0) {
+    storeDetailContainer.innerHTML = `<div class="no-results"><p>ไม่พบรายการสั่งซื้อ</p></div>`;
+    return;
+  }
+  
+  let theadHTML = `
+    <tr>
+      <th class="col-product">ชื่อสินค้า</th>
+      <th class="col-orders">จำนวน</th>
+      <th class="col-stock">ราคา</th>
+    </tr>
+  `;
+  
+  let tbodyHTML = '';
+  customerOrders.forEach(item => {
+    const productName = item['ชื่อสินค้า'] || '';
+    const quantity = item['จำนวน'] || '0';
+    const totalValue = item['มูลค่ารวม'] || '0';
+    
+    tbodyHTML += `
+      <tr>
+        <td class="col-product">${escapeHTML(String(productName))}</td>
+        <td class="col-orders"><span class="order-badge">${escapeHTML(String(quantity))}</span></td>
+        <td class="col-stock">${escapeHTML(String(totalValue))}</td>
+      </tr>
+    `;
+  });
+  
+  const table = document.createElement('table');
+  table.innerHTML = `
+    <thead>${theadHTML}</thead>
+    <tbody>${tbodyHTML}</tbody>
+  `;
+  
+  storeDetailContainer.innerHTML = '';
+  
+  const tableWrapper = document.createElement('div');
+  tableWrapper.className = 'table-container';
+  tableWrapper.appendChild(table);
+  
+  storeDetailContainer.appendChild(tableWrapper);
 }
 
 // Start App
