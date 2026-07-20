@@ -6,7 +6,6 @@ window.onerror = function(message, source, lineno, colno, error) {
   alert("JS Error: " + message + " at " + lineno + ":" + colno);
 };
 
-// Configurable data keys in case the JSON structure changes in the future
 const DATA_KEYS = {
   category: 'หมวดหมู่',
   colorName: 'สี',
