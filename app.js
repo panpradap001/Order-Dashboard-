@@ -61,6 +61,7 @@ let customCategoryOrder = [];
 let storeSearchDebounceTimeout = null;
 let currentStoreDetailName = null;
 let sortableInstance = null;
+let activeStoreListFilter = 'ทั้งหมด';
 
 // Initialize
 function init() {
@@ -619,14 +620,15 @@ function escapeHTML(str) {
     .replace(/'/g, "&#039;");
 }
 
+
 // Render Store List
 function renderStoreList() {
   if (!storeListContainer) return;
   
-  // Extract unique customer names
+  // 1. ดึงรายชื่อลูกค้าที่ไม่ซ้ำ
   let uniqueCustomers = [...new Set(storeRawData.map(item => item['ชื่อลูกค้า']).filter(Boolean))];
   
-  // Filter by search term if provided
+  // 2. กรองข้อมูลตามคำค้นหา (ถ้ามี)
   const storeSearchInput = document.getElementById('store-search');
   const searchTerm = storeSearchInput ? storeSearchInput.value.toLowerCase().trim() : '';
   
@@ -635,26 +637,171 @@ function renderStoreList() {
       customer.toLowerCase().includes(searchTerm)
     );
   }
+
+  // ==========================================
+  // ส่วนที่ 1: แทรกสรุปยอดขายลงใน Header เดิมของ HTML
+  // ==========================================
+  // คำนวณยอดขายรวมทั้งหมด
+  const grandTotal = storeRawData.reduce((sum, item) => sum + Number(item['มูลค่ารวม'] || 0), 0);
   
+  // จัดกลุ่มยอดขายตามรอบ/สถานะ
+  const statusTotals = {};
+  storeRawData.forEach(item => {
+    const status = item['สถานะ'] || item['สถานนะ'] || 'ไม่ระบุ';
+    if (!statusTotals[status]) statusTotals[status] = 0;
+    statusTotals[status] += Number(item['มูลค่ารวม'] || 0);
+  });
+  
+  // จัดเรียงชื่อรอบตามตัวอักษร
+  const uniqueStatuses = Object.keys(statusTotals).sort();
+  const filterStatuses = [...uniqueStatuses];
+  
+  // สร้าง HTML สำหรับรายการรอบต่างๆ
+  let statusListHTML = '';
+  filterStatuses.forEach((status) => {
+    // เลือกสีปุ่มตามสถานะที่ถูกเลือก (activeStoreListFilter)
+    const btnBg = (status === activeStoreListFilter) ? '#f97316' : '#3b82f6';
+    const totalAmount = (status === 'ทั้งหมด') ? grandTotal : statusTotals[status];
+    const totalStatus = totalAmount.toLocaleString('th-TH', {minimumFractionDigits: 2});
+    
+    statusListHTML += `
+      <div class="store-filter-btn" data-status="${escapeHTML(status)}" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; cursor: pointer; opacity: ${status === activeStoreListFilter ? '1' : '0.6'}; transition: opacity 0.2s;">
+        <div style="background-color: ${btnBg}; color: white; padding: 2px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; min-width: 70px; text-align: center; box-shadow: var(--shadow-sm); transition: background-color 0.2s;">
+          ${escapeHTML(status)}
+        </div>
+        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary); text-align: right;">
+          ${totalStatus}
+        </div>
+      </div>
+    `;
+  });
+
+  const summaryHTML = `
+    <div style="display: flex; gap: 20px; align-items: stretch;">
+      <!-- กล่องยอดขายสุทธิ (สีน้ำเงิน) -->
+      <div style="background: linear-gradient(180deg, #5b86e5, #367bdc); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: var(--shadow-md); min-width: 180px; flex-shrink: 0; align-self: center;">
+        <div style="font-size: 0.95rem; margin-bottom: 0.25rem; font-weight: 500;">ยอดขายสุทธิ</div>
+        <div style="font-size: 1.4rem; font-weight: 700;">${grandTotal.toLocaleString('th-TH', {minimumFractionDigits: 2})}</div>
+      </div>
+      
+      <!-- รายการย่อยตามรอบ -->
+      <div style="display: flex; flex-direction: column; justify-content: flex-start; background: white; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); min-width: 220px; max-width: 260px;">
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600;">ยอดตามสถานะ</div>
+        <div style="max-height: 100px; overflow-y: auto; padding-right: 5px;">
+          ${statusListHTML}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // นำ HTML ด้านบน ไปแทรกไว้ตรงกลาง Header (.dashboard-header)
+  if (storeSearchInput) {
+    const headerContainer = storeSearchInput.closest('.dashboard-header');
+    if (headerContainer) {
+      let dynamicSummary = document.getElementById('dynamic-store-summary');
+      
+      // ถ้ายังไม่มีส่วนแทรกนี้ ให้สร้างขึ้นมาใหม่
+      if (!dynamicSummary) {
+        dynamicSummary = document.createElement('div');
+        dynamicSummary.id = 'dynamic-store-summary';
+        
+        // จัด Layout ให้อยู่กึ่งกลาง และดันช่องค้นหาไปทางขวา
+        dynamicSummary.style.display = 'flex';
+        dynamicSummary.style.gap = '30px';
+        dynamicSummary.style.alignItems = 'center';
+        dynamicSummary.style.flex = '1';
+        dynamicSummary.style.justifyContent = 'flex-start';
+        dynamicSummary.style.marginLeft = '20px';
+        
+        // หา element ของช่องค้นหา เพื่อจะได้เอาส่วนสรุปยอด ไปวางไว้ด้านหน้ามัน
+        const controlsWrapper = storeSearchInput.closest('.controls-wrapper') || storeSearchInput.parentNode;
+        headerContainer.insertBefore(dynamicSummary, controlsWrapper);
+      }
+      
+      // อัปเดตตัวเลขและผูก Event 
+      dynamicSummary.innerHTML = summaryHTML;
+      
+      // ผูก Event Click สำหรับกรองสถานะ
+      const filterBtns = dynamicSummary.querySelectorAll('.store-filter-btn');
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const clickedStatus = e.currentTarget.getAttribute('data-status');
+          // ถ้ากดสถานะเดิมที่เลือกอยู่ ให้ยกเลิกการกรอง (กลับไปเป็น 'ทั้งหมด')
+          if (activeStoreListFilter === clickedStatus) {
+            activeStoreListFilter = 'ทั้งหมด';
+          } else {
+            activeStoreListFilter = clickedStatus;
+          }
+          renderStoreList();
+        });
+      });
+    }
+  }
+
+  // ==========================================
+  // กรองลูกค้าตามสถานะที่เลือก (activeStoreListFilter)
+  // ==========================================
+  if (activeStoreListFilter !== 'ทั้งหมด') {
+    uniqueCustomers = uniqueCustomers.filter(customer => {
+      return storeRawData.some(item => 
+        item['ชื่อลูกค้า'] === customer && 
+        (item['สถานะ'] || item['สถานนะ'] || 'ไม่ระบุ') === activeStoreListFilter
+      );
+    });
+  }
+
+  // ==========================================
+  // ส่วนที่ 2: ล้างข้อมูลเก่าและสร้าง Grid ร้านค้าใหม่
+  // ==========================================
+  storeListContainer.innerHTML = '';
+
   if (uniqueCustomers.length === 0) {
-    storeListContainer.innerHTML = `<div class="no-results"><p>ไม่พบข้อมูลร้านค้า</p></div>`;
+    const noResults = document.createElement('div');
+    noResults.className = 'no-results';
+    noResults.innerHTML = '<p>ไม่พบข้อมูลร้านค้า</p>';
+    storeListContainer.appendChild(noResults);
     return;
   }
 
-  storeListContainer.innerHTML = '';
+  const gridContainer = document.createElement('div');
+  gridContainer.className = 'dashboard-grid store-grid';
+  gridContainer.style.display = 'grid'; // บังคับให้เป็น grid ตามเดิม
+  
   const fragment = document.createDocumentFragment();
 
   uniqueCustomers.forEach(customer => {
     const card = document.createElement('div');
     card.className = 'store-card';
+    card.style.display = 'flex';
+    card.style.flexDirection = 'row';
+    card.style.justifyContent = 'space-between';
+    card.style.alignItems = 'center';
     
-    // Count orders for this customer
-    const customerOrders = storeRawData.filter(item => item['ชื่อลูกค้า'] === customer);
+    let customerOrders = storeRawData.filter(item => item['ชื่อลูกค้า'] === customer);
+    
+    if (activeStoreListFilter !== 'ทั้งหมด') {
+      customerOrders = customerOrders.filter(item => (item['สถานะ'] || item['สถานนะ'] || 'ไม่ระบุ') === activeStoreListFilter);
+    }
+    
     const totalItems = customerOrders.length;
     
+    const totalAmount = customerOrders.reduce((sum, item) => {
+      return sum + Number(item['มูลค่ารวม'] || 0);
+    }, 0);
+    
+    const formattedTotal = totalAmount.toLocaleString('th-TH', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    });
+    
     card.innerHTML = `
-      <h3>${escapeHTML(customer)}</h3>
-      <div class="store-stats">รายการสั่งซื้อ: ${totalItems} รายการ</div>
+      <div class="store-info">
+        <h3 style="margin-bottom: 0.25rem;">${escapeHTML(customer)}</h3>
+        <div class="store-stats" style="color: var(--text-secondary); font-size: 0.85rem;">รายการสั่งซื้อ: ${totalItems} รายการ</div>
+      </div>
+      <div class="store-total-badge" style="background-color: var(--highlight-bg); color: var(--accent-color); padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 700; font-size: 1.1rem; min-width: 140px; text-align: right; border: 1px solid rgba(59, 130, 246, 0.2);">
+        ${formattedTotal}
+      </div>
     `;
     
     card.addEventListener('click', () => {
@@ -664,10 +811,10 @@ function renderStoreList() {
     fragment.appendChild(card);
   });
   
-  storeListContainer.appendChild(fragment);
+  gridContainer.appendChild(fragment);
+  storeListContainer.appendChild(gridContainer);
 }
 
-// Render Store Detail Table
 function renderStoreDetail(customerName) {
   currentStoreDetailName = customerName;
   
@@ -676,49 +823,166 @@ function renderStoreDetail(customerName) {
   
   if (storeDetailTitle) storeDetailTitle.textContent = customerName;
   
+  // 1. ดึงข้อมูลออเดอร์ทั้งหมดของลูกค้านี้
   const customerOrders = storeRawData.filter(item => item['ชื่อลูกค้า'] === customerName);
   
   if (customerOrders.length === 0) {
     storeDetailContainer.innerHTML = `<div class="no-results"><p>ไม่พบรายการสั่งซื้อ</p></div>`;
     return;
   }
+
+  // 2. หา 'สถานะ' ที่ไม่ซ้ำกัน เพื่อนำมาสร้างปุ่ม (เช่น ['Now', 'On Hold 3'])
+  const uniqueStatuses = ['ทั้งหมด', ...new Set(customerOrders.map(item => item['สถานะ'] || item['สถานนะ'] || 'ไม่ระบุ'))];
   
-  let theadHTML = `
-    <tr>
-      <th class="col-product">ชื่อสินค้า</th>
-      <th class="col-orders">จำนวน</th>
-      <th class="col-stock">ราคา</th>
-    </tr>
-  `;
-  
-  let tbodyHTML = '';
-  customerOrders.forEach(item => {
-    const productName = item['ชื่อสินค้า'] || '';
-    const quantity = item['จำนวน'] || '0';
-    const totalValue = item['มูลค่ารวม'] || '0';
+  // กำหนดสถานะแรกเป็นค่า Default
+  let activeStatus = uniqueStatuses[0];
+
+  // ฟังก์ชันย่อยสำหรับ Render เนื้อหาในตารางตามสถานะที่เลือก
+  const renderContent = () => {
+    storeDetailContainer.innerHTML = ''; // ล้างข้อมูลเก่า
     
-    tbodyHTML += `
+    // --- สร้างปุ่ม Tab สถานะ (Dynamic Tabs) ---
+    const tabContainer = document.createElement('div');
+    tabContainer.style.display = 'flex';
+    tabContainer.style.gap = '10px';
+    tabContainer.style.marginBottom = '20px';
+
+    uniqueStatuses.forEach(status => {
+      const btn = document.createElement('button');
+      btn.textContent = status; // ใช้ชื่อสถานะตรงๆ เช่น Now, On Hold 3
+      btn.className = 'btn-primary'; // ยืม class ปุ่มจาก style.css
+      
+      // ปรับแต่งสีปุ่มให้รู้ว่าปุ่มไหนถูกเลือก (Active)
+      if (status !== activeStatus) {
+        btn.style.backgroundColor = 'var(--surface-color)';
+        btn.style.color = 'var(--text-primary)';
+        btn.style.border = '1px solid var(--border-color)';
+      }
+      
+      // Event เมื่อกดเปลี่ยนรอบส่ง
+      btn.addEventListener('click', () => {
+        activeStatus = status;
+        renderContent(); // สั่ง Render ตารางใหม่
+      });
+      
+      tabContainer.appendChild(btn);
+    });
+    
+    storeDetailContainer.appendChild(tabContainer);
+
+    // --- กรองข้อมูลเฉพาะ 'สถานะ' ที่กำลังเลือก ---
+    const activeOrders = activeStatus === 'ทั้งหมด' 
+      ? customerOrders 
+      : customerOrders.filter(item => (item['สถานะ'] || item['สถานนะ'] || 'ไม่ระบุ') === activeStatus);
+
+    // --- สร้างตารางและ Checkbox ---
+    let theadHTML = `
       <tr>
-        <td class="col-product">${escapeHTML(String(productName))}</td>
-        <td class="col-orders"><span class="order-badge">${escapeHTML(String(quantity))}</span></td>
-        <td class="col-stock">${escapeHTML(String(totalValue))}</td>
+        <th style="width: 50px; text-align: center;">
+          <input type="checkbox" id="selectAllCheckbox" checked style="cursor: pointer;">
+        </th>
+        <th class="col-product">ชื่อสินค้า</th>
+        <th class="col-orders">จำนวน</th>
+        <th class="col-stock">ราคารวม (บาท)</th>
       </tr>
     `;
-  });
-  
-  const table = document.createElement('table');
-  table.innerHTML = `
-    <thead>${theadHTML}</thead>
-    <tbody>${tbodyHTML}</tbody>
-  `;
-  
-  storeDetailContainer.innerHTML = '';
-  
-  const tableWrapper = document.createElement('div');
-  tableWrapper.className = 'table-container';
-  tableWrapper.appendChild(table);
-  
-  storeDetailContainer.appendChild(tableWrapper);
+    
+    let tbodyHTML = '';
+    activeOrders.forEach((item, index) => {
+      const productName = item['ชื่อสินค้า'] || '';
+      const quantity = item['จำนวน'] || '0';
+      const totalValue = Number(item['มูลค่ารวม'] || 0); // ต้องดึงมูลค่ารวมมาเป็นตัวเลข
+      
+      // เก็บค่า totalValue ไว้ใน data-value เพื่อให้คำนวณง่าย
+      tbodyHTML += `
+        <tr class="order-row" data-value="${totalValue}" style="transition: all 0.2s;">
+          <td style="text-align: center;">
+            <input type="checkbox" class="row-checkbox" checked style="cursor: pointer;">
+          </td>
+          <td class="col-product">${escapeHTML(String(productName))}</td>
+          <td class="col-orders"><span class="order-badge">${escapeHTML(String(quantity))}</span></td>
+          <td class="col-stock" style="text-align: right;">${totalValue.toLocaleString('th-TH', {minimumFractionDigits: 2})}</td>
+        </tr>
+      `;
+    });
+    
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <thead>${theadHTML}</thead>
+      <tbody>${tbodyHTML}</tbody>
+    `;
+    
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'table-container';
+    tableWrapper.appendChild(table);
+    storeDetailContainer.appendChild(tableWrapper);
+
+    // --- สร้างส่วนแสดงผล "ยอดรวมสุทธิ" (Dynamic Total) ---
+    const summaryContainer = document.createElement('div');
+    summaryContainer.style.marginTop = '20px';
+    summaryContainer.style.padding = '15px 20px';
+    summaryContainer.style.backgroundColor = 'var(--surface-color)';
+    summaryContainer.style.border = '1px solid var(--border-color)';
+    summaryContainer.style.borderRadius = '8px';
+    summaryContainer.style.display = 'flex';
+    summaryContainer.style.justifyContent = 'space-between';
+    summaryContainer.style.alignItems = 'center';
+    
+    summaryContainer.innerHTML = `
+      <h3 style="margin:0; font-size: 1.25rem; color: var(--text-primary);">ยอดรวม:</h3>
+      <h3 style="margin:0; font-size: 1.25rem;">
+        <span id="dynamic-total" style="color: var(--accent-color); font-weight: 700;">0.00</span> บาท
+      </h3>
+    `;
+    storeDetailContainer.appendChild(summaryContainer);
+
+    // --- Logic การทำงานของ Checkbox และคำนวณยอดเงิน ---
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+    const totalDisplay = document.getElementById('dynamic-total');
+    const rows = document.querySelectorAll('.order-row');
+
+    const calculateTotal = () => {
+      let total = 0;
+      rowCheckboxes.forEach((checkbox, index) => {
+        const row = rows[index];
+        if (checkbox.checked) {
+          total += Number(row.getAttribute('data-value'));
+          // คืนสีแถวให้สว่างปกติ
+          row.style.opacity = '1';
+          row.style.backgroundColor = '';
+        } else {
+          // หากไม่เลือก ให้แถวสีจางลงเพื่อให้สังเกตง่าย
+          row.style.opacity = '0.4'; 
+          row.style.backgroundColor = 'var(--bg-color)';
+        }
+      });
+      totalDisplay.textContent = total.toLocaleString('th-TH', {minimumFractionDigits: 2});
+    };
+
+    // Event เลือกทั้งหมด / ยกเลิกทั้งหมด[cite: 3]
+    selectAllCheckbox.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      rowCheckboxes.forEach(cb => cb.checked = isChecked);
+      calculateTotal();
+    });
+
+    // Event เลือกระดับรายสินค้า[cite: 3]
+    rowCheckboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        // อัปเดต Checkbox 'เลือกทั้งหมด' ถ้าเราติ๊กครบทุกอัน
+        const allChecked = Array.from(rowCheckboxes).every(c => c.checked);
+        selectAllCheckbox.checked = allChecked;
+        calculateTotal();
+      });
+    });
+
+    // คำนวณครั้งแรกเมื่อโหลดหน้า
+    calculateTotal();
+  };
+
+  // เริ่ม Render ครั้งแรก
+  renderContent();
 }
 
 // Start App
