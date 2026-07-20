@@ -6,6 +6,7 @@ window.onerror = function(message, source, lineno, colno, error) {
   alert("JS Error: " + message + " at " + lineno + ":" + colno);
 };
 
+// Configurable data keys in case the JSON structure changes in the future
 const DATA_KEYS = {
   category: 'หมวดหมู่',
   colorName: 'สี',
@@ -684,7 +685,7 @@ function renderStoreList() {
       </div>
       
       <!-- รายการย่อยตามรอบ -->
-      <div style="display: flex; flex-direction: column; justify-content: flex-start; background: white; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); min-width: 220px; max-width: 260px;">
+      <div style="display: flex; flex-direction: column; justify-content: flex-start; flex: 1; background: white; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); min-width: 320px; max-width: 380px;">
         <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600;">ยอดตามสถานะ</div>
         <div style="max-height: 100px; overflow-y: auto; padding-right: 5px;">
           ${statusListHTML}
