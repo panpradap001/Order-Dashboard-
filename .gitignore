@@ -1,2 +1,19 @@
-/node_modules
-/.env
+# Dependencies
+node_modules
+/functions/node_modules
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+!.sample.env
+
+# Firebase Cache & Logs
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# System Files
+.DS_Store
+Thumbs.db
