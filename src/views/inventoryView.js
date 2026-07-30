@@ -1,4 +1,4 @@
-import { getInventoryAdjustments, saveInventoryAdjustment, deleteInventoryAdjustment, generateNextDocNo } from "../services/inventoryService.js";
+import { subscribeInventoryAdjustments, checkDocExists, getInventoryAdjustments, saveInventoryAdjustment, deleteInventoryAdjustment, generateNextDocNo } from "../services/inventoryService.js";
 import { getProducts, fetchProducts } from "./productView.js";
 import { state } from "../store/state.js";
 import { escapeHTML } from "../utils/helpers.js";
@@ -200,10 +200,16 @@ export function initInventoryView() {
   loadInventoryAdjustments();
 }
 
-export async function loadInventoryAdjustments() {
-  adjustmentsCache = await getInventoryAdjustments();
-  const searchInput = document.getElementById('inv-search-input');
-  renderInventoryList(searchInput ? searchInput.value.trim() : '');
+let inventoryUnsubscribe = null;
+
+export function loadInventoryAdjustments() {
+  if (inventoryUnsubscribe) return; // Already subscribed
+  
+  inventoryUnsubscribe = subscribeInventoryAdjustments((data) => {
+    adjustmentsCache = data;
+    const searchInput = document.getElementById('inv-search-input');
+    renderInventoryList(searchInput ? searchInput.value.trim() : '');
+  });
 }
 
 function renderInventoryList(searchTerm = '') {
@@ -839,11 +845,20 @@ async function handleInventoryFormSubmit(e) {
   saveBtn.disabled = true;
   saveBtn.textContent = 'กำลังบันทึก...';
 
-  // Use docNo as the document ID, replace invalid firebase characters INCLUDING slash
-  const docId = docNo.replace(/[.#$[\]\/]/g, '_');
+  let finalDocNo = docNo;
+  let docId = finalDocNo.replace(/[.#$[\]\/]/g, '_');
+  
+  // Check for duplicate docId
+  let exists = await checkDocExists(docId);
+  if (exists) {
+    finalDocNo = await generateNextDocNo();
+    docId = finalDocNo.replace(/[.#$[\]\/]/g, '_');
+    alert(`เลขที่เอกสาร ${docNo} มีการใช้งานไปแล้ว ระบบได้สร้างเลขใหม่ให้เป็น ${finalDocNo}`);
+    document.getElementById('inv-doc-no').value = finalDocNo;
+  }
 
   const docData = {
-    docNo,
+    docNo: finalDocNo,
     docDate,
     recordedBy,
     remark,
@@ -858,7 +873,6 @@ async function handleInventoryFormSubmit(e) {
     alert('บันทึกเอกสารเรียบร้อยแล้ว');
     localStorage.removeItem('inventoryFormDraft');
     showInventoryList();
-    loadInventoryAdjustments();
   } else {
     alert('เกิดข้อผิดพลาดในการบันทึก: ' + result.error);
   }
@@ -934,6 +948,7 @@ function generateInventoryReport() {
       .printable-report > div { margin-bottom: 6px !important; } 
       .printable-report div[style*="font-size: 1.1rem"] { font-size: 10px !important; margin-bottom: 1px !important; gap: 1rem !important; font-weight: bold; }
       .printable-report div[style*="font-size: 1.2rem"] { font-size: 11px !important; padding: 4px !important; margin-bottom: 0 !important; border: none !important; }
+      .hide-on-print { display: none !important; }
     }
   </style>`;
   
@@ -948,11 +963,11 @@ function generateInventoryReport() {
   reportHtml += `<h3 style="margin-bottom: 0.5rem; text-align: center;">รายงานใบปรับปรุงยอดสินค้า</h3>`;
   reportHtml += `<p style="text-align: center; margin-bottom: 1.5rem; color: #475569; line-height: 1.5;">
     วันที่: <strong>${formatD(startDate)} ถึง ${formatD(endDate)}</strong><br>
-    รูปแบบ: <strong>${groupStr}</strong> | สินค้า: <strong>${prodStr}</strong> | เงื่อนไข: <strong>${condStr}</strong>
+    รูปแบบ: <strong>${groupStr}</strong> | สินค้า: <strong>${prodStr}</strong><span class="hide-on-print"> | เงื่อนไข: <strong>${condStr}</strong></span>
   </p>`;
   
   const packerTh = hidePacker ? '' : '<th style="padding: 8px 4px; border: none; width: 15%;">พนักงานแพ็คสินค้า</th>';
-  const packerTd = (val) => hidePacker ? '' : `<td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${val || '-'}</td>`;
+  const packerTd = (val) => hidePacker ? '' : `<td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(val || '-')}</td>`;
   
   if (groupRadio === 'Date') {
     let totalQtyIn = 0;
@@ -961,12 +976,12 @@ function generateInventoryReport() {
     // Sort by Date
     entries.sort((a, b) => a.docDate.localeCompare(b.docDate)).forEach(doc => {
       // Filter valid items first
-      const validItems = doc.items.filter(item => selectedReportProducts.includes('all') || selectedReportProducts.includes(item.pCode));
+      const validItems = (doc.items || []).filter(item => selectedReportProducts.includes('all') || selectedReportProducts.includes(item.pCode));
       
       if (validItems.length > 0) {
         reportHtml += `<div style="margin-bottom: 2rem;">
           <div style="display: flex; gap: 3rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: #1e293b;">
-            <span style="min-width: 150px;">${doc.docNo}</span>
+            <span style="min-width: 150px;">${escapeHTML(doc.docNo)}</span>
             <span>${formatD(doc.docDate)}</span>
           </div>
           <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; color: #475569;">
@@ -982,8 +997,10 @@ function generateInventoryReport() {
             <tbody>`;
             
         validItems.forEach(item => {
-          totalQtyIn += (item.qtyIn || 0);
-          totalQtyOut += (item.qtyOut || 0);
+          if (!doc.isDeleted) {
+            totalQtyIn += (Number(item.qtyIn) || 0);
+            totalQtyOut += (Number(item.qtyOut) || 0);
+          }
           
           let qtyInText = item.qtyIn ? `<span style="color: #166534;">${Number(item.qtyIn)}</span>` : '-';
           let qtyOutText = item.qtyOut ? `<span style="color: #b91c1c;">${Number(item.qtyOut)}</span>` : '-';
@@ -992,12 +1009,12 @@ function generateInventoryReport() {
           if (doc.isDeleted) trStyle = "text-decoration: line-through; color: #ef4444; opacity: 0.6;";
           
           reportHtml += `<tr style="${trStyle}">
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.pCode}</td>
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.pName}</td>
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.color || '-'}</td>
+            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(item.pCode)}</td>
+            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(item.pName)}</td>
+            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(item.color || '-')}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${item.lot || '-'}</td>
+            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${escapeHTML(item.lot || '-')}</td>
             ${packerTd(item.packerName)}
           </tr>`;
         });
@@ -1016,15 +1033,17 @@ function generateInventoryReport() {
     let grandTotalOut = 0;
     
     entries.forEach(doc => {
-      doc.items.forEach(item => {
+      (doc.items || []).forEach(item => {
         if (selectedReportProducts.includes('all') || selectedReportProducts.includes(item.pCode)) {
           if (!productGroups[item.pCode]) {
             productGroups[item.pCode] = { name: item.pName, unit: item.unit, totalIn: 0, totalOut: 0, details: [] };
           }
-          productGroups[item.pCode].totalIn += (item.qtyIn || 0);
-          productGroups[item.pCode].totalOut += (item.qtyOut || 0);
-          grandTotalIn += (item.qtyIn || 0);
-          grandTotalOut += (item.qtyOut || 0);
+          if (!doc.isDeleted) {
+            productGroups[item.pCode].totalIn += (Number(item.qtyIn) || 0);
+            productGroups[item.pCode].totalOut += (Number(item.qtyOut) || 0);
+            grandTotalIn += (Number(item.qtyIn) || 0);
+            grandTotalOut += (Number(item.qtyOut) || 0);
+          }
           productGroups[item.pCode].details.push({ 
             date: doc.docDate, docNo: doc.docNo, isDeleted: doc.isDeleted,
             qtyIn: (item.qtyIn || 0), qtyOut: (item.qtyOut || 0), 
@@ -1039,7 +1058,7 @@ function generateInventoryReport() {
       const g = productGroups[pCode];
       reportHtml += `<div style="margin-bottom: 2rem;">
         <div style="display: flex; gap: 3rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: #1e293b;">
-          <span>สินค้า: ${pCode} - ${g.name}</span>
+          <span>สินค้า: ${escapeHTML(pCode)} - ${escapeHTML(g.name)}</span>
         </div>
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; color: #475569;">
           <thead><tr style="border-bottom: 1px solid #cbd5e1; color: #64748b; font-size: 0.9rem;">
@@ -1061,20 +1080,20 @@ function generateInventoryReport() {
         
         reportHtml += `<tr style="${trStyle}">
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${formatD(d.date)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.docNo}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.color || '-'}</td>
+          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(d.docNo)}</td>
+          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(d.color || '-')}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${d.lot || '-'}</td>
+          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${escapeHTML(d.lot || '-')}</td>
           ${packerTd(d.packerName)}
         </tr>`;
       });
-      const colspanValue = hidePacker ? 3 : 4;
+      const remainingCols = hidePacker ? 1 : 2;
       reportHtml += `<tr style="font-weight: bold; color: #1e293b;">
-        <td colspan="${colspanValue}" style="padding: 8px 4px; text-align: right;">รวมสินค้านี้</td>
+        <td colspan="3" style="padding: 8px 4px; text-align: right;">รวมสินค้านี้</td>
         <td style="padding: 8px 4px; text-align: right; color: #166534;">${Number(g.totalIn)}</td>
         <td style="padding: 8px 4px; text-align: right; color: #b91c1c;">${Number(g.totalOut)}</td>
-        <td style="padding: 8px 4px;"></td>
+        <td colspan="${remainingCols}" style="padding: 8px 4px;"></td>
       </tr>`;
       reportHtml += `</tbody></table></div>`;
     });
@@ -1089,16 +1108,18 @@ function generateInventoryReport() {
     let grandTotalOut = 0;
     
     entries.forEach(doc => {
-      doc.items.forEach(item => {
+      (doc.items || []).forEach(item => {
         if (selectedReportProducts.includes('all') || selectedReportProducts.includes(item.pCode)) {
           const lotKey = item.lot ? item.lot.trim() : 'ไม่มี Lot';
           if (!lotGroups[lotKey]) {
             lotGroups[lotKey] = { totalIn: 0, totalOut: 0, details: [] };
           }
-          lotGroups[lotKey].totalIn += (item.qtyIn || 0);
-          lotGroups[lotKey].totalOut += (item.qtyOut || 0);
-          grandTotalIn += (item.qtyIn || 0);
-          grandTotalOut += (item.qtyOut || 0);
+          if (!doc.isDeleted) {
+            lotGroups[lotKey].totalIn += (Number(item.qtyIn) || 0);
+            lotGroups[lotKey].totalOut += (Number(item.qtyOut) || 0);
+            grandTotalIn += (Number(item.qtyIn) || 0);
+            grandTotalOut += (Number(item.qtyOut) || 0);
+          }
           lotGroups[lotKey].details.push({ 
             date: doc.docDate, docNo: doc.docNo, isDeleted: doc.isDeleted,
             pCode: item.pCode, pName: item.pName, color: item.color,
@@ -1113,7 +1134,7 @@ function generateInventoryReport() {
       const g = lotGroups[lotKey];
       reportHtml += `<div style="margin-bottom: 2rem;">
         <div style="display: flex; gap: 3rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: #1e293b;">
-          <span>Lot: ${lotKey}</span>
+          <span>Lot: ${escapeHTML(lotKey)}</span>
         </div>
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem; color: #475569;">
           <thead><tr style="border-bottom: 1px solid #cbd5e1; color: #64748b; font-size: 0.9rem;">
@@ -1134,18 +1155,20 @@ function generateInventoryReport() {
         
         reportHtml += `<tr style="${trStyle}">
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${formatD(d.date)}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.docNo}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.pCode} - ${d.pName}${d.color ? ` (${d.color})` : ''}</td>
+          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(d.docNo)}</td>
+          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${escapeHTML(d.pCode)} - ${escapeHTML(d.pName)}${d.color ? ` (${escapeHTML(d.color)})` : ''}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
           ${packerTd(d.packerName)}
         </tr>`;
       });
-      const colspanValue = hidePacker ? 3 : 4;
+      const remainingCols = hidePacker ? 0 : 1;
+      const extraTds = remainingCols > 0 ? `<td colspan="${remainingCols}" style="padding: 8px 4px;"></td>` : '';
       reportHtml += `<tr style="font-weight: bold; color: #1e293b;">
-        <td colspan="${colspanValue}" style="padding: 8px 4px; text-align: right;">รวม Lot นี้</td>
+        <td colspan="3" style="padding: 8px 4px; text-align: right;">รวม Lot นี้</td>
         <td style="padding: 8px 4px; text-align: right; color: #166534;">${Number(g.totalIn)}</td>
         <td style="padding: 8px 4px; text-align: right; color: #b91c1c;">${Number(g.totalOut)}</td>
+        ${extraTds}
       </tr>`;
       reportHtml += `</tbody></table></div>`;
     });
@@ -1198,10 +1221,10 @@ function viewInventoryDetails(docIdToFind) {
         <h3 style="margin-bottom: 1.5rem; color: var(--primary-color);">รายละเอียดใบปรับปรุงยอดสินค้า</h3>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; background: #f8fafc; padding: 1.25rem; border-radius: 8px; border: 1px solid #cbd5e1;">
-          <div><strong style="color: #475569;">เลขที่เอกสาร:</strong> <span style="font-weight: 600;">${foundDoc.docNo}</span></div>
-          <div><strong style="color: #475569;">วันที่:</strong> <span>${displayDate}</span></div>
-          <div><strong style="color: #475569;">ผู้บันทึก:</strong> <span>${foundDoc.recordedBy || '-'}</span></div>
-          <div><strong style="color: #475569;">หมายเหตุ:</strong> <span>${foundDoc.remark || ''}</span></div>
+          <div><strong style="color: #475569;">เลขที่เอกสาร:</strong> <span style="font-weight: 600;">${escapeHTML(foundDoc.docNo)}</span></div>
+          <div><strong style="color: #475569;">วันที่:</strong> <span>${escapeHTML(displayDate)}</span></div>
+          <div><strong style="color: #475569;">ผู้บันทึก:</strong> <span>${escapeHTML(foundDoc.recordedBy || '-')}</span></div>
+          <div><strong style="color: #475569;">หมายเหตุ:</strong> <span>${escapeHTML(foundDoc.remark || '')}</span></div>
         </div>
 
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
@@ -1217,11 +1240,11 @@ function viewInventoryDetails(docIdToFind) {
           <tbody>
             ${(foundDoc.items || []).map(item => `
               <tr>
-                <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.pCode} - ${item.pName}${item.color ? ` (${item.color})` : ''}</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1;">${escapeHTML(item.pCode)} - ${escapeHTML(item.pName)}${item.color ? ` (${escapeHTML(item.color)})` : ''}</td>
                 <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #166534;">${item.qtyIn || 0}</td>
                 <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #b91c1c;">${item.qtyOut || 0}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.lot || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.packerName || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1;">${escapeHTML(item.lot || '-')}</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1;">${escapeHTML(item.packerName || '-')}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1247,7 +1270,6 @@ async function deleteInventoryRecord(docId) {
     const result = await deleteInventoryAdjustment(docId);
     if (result.success) {
       alert('ลบข้อมูลเรียบร้อยแล้ว');
-      loadInventoryAdjustments();
     } else {
       alert('เกิดข้อผิดพลาดในการลบ: ' + result.error);
     }
@@ -1290,6 +1312,5 @@ async function deleteSelectedInventoryRecords() {
     }
     
     alert(`ลบข้อมูลสำเร็จ ${successCount} รายการ${errorCount > 0 ? `\nลบไม่สำเร็จ ${errorCount} รายการ` : ''}`);
-    loadInventoryAdjustments();
   }
 }
