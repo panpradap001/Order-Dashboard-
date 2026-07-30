@@ -1,4 +1,4 @@
-import { ref as dbRef, get, set, remove, query, orderByChild } from "firebase/database";
+import { ref as dbRef, get, set, remove, update, query, orderByChild } from "firebase/database";
 import { database } from "../config/firebase.js";
 
 /**
@@ -33,12 +33,12 @@ export async function saveInventoryAdjustment(docId, docData) {
 }
 
 /**
- * Delete an inventory adjustment document
+ * Delete an inventory adjustment document (Soft Delete)
  */
 export async function deleteInventoryAdjustment(docId) {
   try {
     const invRef = dbRef(database, `inventory_adjustments/${docId}`);
-    await remove(invRef);
+    await update(invRef, { isDeleted: true });
     return { success: true };
   } catch (error) {
     console.error("Error deleting inventory adjustment:", error);
@@ -52,8 +52,7 @@ export async function deleteInventoryAdjustment(docId) {
 export async function generateNextDocNo() {
   try {
     const fullYear = new Date().getFullYear();
-    const shortYear = String(fullYear).slice(-2);
-    const prefix = `AJP-${shortYear}/`;
+    const prefix = `AI-${fullYear}/`;
     
     const adjustments = await getInventoryAdjustments();
     
@@ -98,7 +97,6 @@ export async function generateNextDocNo() {
     console.error("Error generating next doc no:", error);
     // Fallback if error
     const fullYear = new Date().getFullYear();
-    const shortYear = String(fullYear).slice(-2);
-    return `AJP-${shortYear}/0001`;
+    return `AI-${fullYear}/0000`;
   }
 }

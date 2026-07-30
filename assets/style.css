@@ -75,6 +75,7 @@ body {
   border: 2px solid #3b82f6;
   border-radius: 8px;
   padding: 2px;
+  flex-shrink: 0;
 }
 
 .header-logo h2 {
@@ -122,6 +123,7 @@ body {
 .nav-item svg {
   color: #94a3b8;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .nav-item:hover {
@@ -169,6 +171,7 @@ body {
   justify-content: center;
   font-weight: 600;
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .profile-info {
@@ -1100,57 +1103,46 @@ body.presentation-mode .category-card:active {
 
 /* Sidebar Collapse & Responsive Layout */
 .sidebar {
-  transition: width 0.3s ease, transform 0.3s ease;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 100;
+  overflow: hidden;
+}
+
+/* Inner sections always stay full width - never reflow */
+.sidebar-header,
+.sidebar-nav,
+.sidebar-footer {
+  width: 250px;
+  min-width: 250px;
+}
+
+/* Text elements: visible state uses a delay so they fade in AFTER sidebar opens */
+.sidebar .header-logo h2,
+.sidebar .nav-item span,
+.sidebar .profile-info,
+.sidebar .nav-category,
+.sidebar .theme-toggle,
+.sidebar .logout-text {
+  transition: opacity 0.15s ease 0.25s, visibility 0s linear 0.25s;
+  opacity: 1;
+  visibility: visible;
 }
 
 .sidebar.collapsed {
   width: 80px;
 }
 
+/* Text elements: hidden state fades out instantly (no delay) BEFORE sidebar shrinks */
 .sidebar.collapsed .header-logo h2,
 .sidebar.collapsed .nav-item span,
 .sidebar.collapsed .profile-info,
 .sidebar.collapsed .nav-category,
 .sidebar.collapsed .theme-toggle,
 .sidebar.collapsed .logout-text {
-  display: none !important;
-}
-
-.sidebar.collapsed .sidebar-header {
-  padding: 1.5rem 0.5rem;
-  justify-content: center;
-  gap: 8px;
-}
-
-.sidebar.collapsed .header-logo {
-  justify-content: center;
-  gap: 0;
-}
-
-.sidebar.collapsed .nav-item {
-  justify-content: center;
-  padding: 0.75rem;
-}
-
-.sidebar.collapsed .sidebar-footer {
-  padding: 1rem 0;
-  display: flex;
-  justify-content: center;
-}
-
-.sidebar.collapsed .profile-wrapper {
-  justify-content: center;
-  gap: 0;
-}
-
-.sidebar.collapsed #logout-btn {
-  padding: 8px;
-  justify-content: center;
-}
-
-.sidebar.collapsed #logout-btn svg {
-  margin: 0;
+  transition: opacity 0.08s ease 0s, visibility 0s linear 0.08s;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none;
 }
 
 .desktop-toggle {

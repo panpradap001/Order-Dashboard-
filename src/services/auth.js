@@ -125,7 +125,7 @@ function updateUIForRole() {
       if (view !== 'view-dashboard' && view !== 'view-store' && view !== 'view-products' && view !== 'view-settings') item.style.display = 'none';
     } else {
       // Default (employee)
-      if (view !== 'view-dashboard' && view !== 'view-settings') item.style.display = 'none';
+      if (view !== 'view-dashboard' && view !== 'view-settings' && view !== 'view-inventory') item.style.display = 'none';
     }
   });
   

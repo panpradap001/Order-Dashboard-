@@ -91,7 +91,6 @@ function renderUsersTable(users) {
         </td>
         <td style="width: 40%; text-align: left;">
           <select class="role-select-dropdown search-input" data-uid="${escapeHTML(user.uid)}" ${isSelf ? 'disabled title="ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้"' : ''} style="padding: 0.35rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: var(--text-primary); font-size: 0.85rem; cursor: ${isSelf ? 'not-allowed' : 'pointer'}; font-weight: 500; transition: all 0.2s; width: auto; max-width: 100%;">
-            <option value="user" ${user.role === 'user' ? 'selected' : ''}>User (ผู้ใช้ทั่วไป)</option>
             <option value="sales" ${user.role === 'sales' ? 'selected' : ''}>Sales (พนักงานฝ่ายขาย)</option>
             <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>Employee (พนักงาน)</option>
             <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin (ผู้ดูแลระบบ)</option>

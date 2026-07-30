@@ -35,11 +35,16 @@ export function initInventoryView() {
   const reportInvBtn = document.getElementById('report-inventory-btn');
   if (reportInvBtn) reportInvBtn.addEventListener('click', openInventoryReport);
 
+  const cancelInventoryForm = () => {
+    localStorage.removeItem('inventoryFormDraft');
+    showInventoryList();
+  };
+
   const cancelInvBtn = document.getElementById('cancel-inventory-btn');
-  if (cancelInvBtn) cancelInvBtn.addEventListener('click', showInventoryList);
+  if (cancelInvBtn) cancelInvBtn.addEventListener('click', cancelInventoryForm);
 
   const closeInvBtn = document.getElementById('close-inventory-btn');
-  if (closeInvBtn) closeInvBtn.addEventListener('click', showInventoryList);
+  if (closeInvBtn) closeInvBtn.addEventListener('click', cancelInventoryForm);
 
   const backFromReportBtn = document.getElementById('back-from-report-btn');
   if (backFromReportBtn) backFromReportBtn.addEventListener('click', showInventoryList);
@@ -48,7 +53,11 @@ export function initInventoryView() {
   if (addRowBtn) addRowBtn.addEventListener('click', addInventoryItemRow);
 
   // Form Submit
-  if (invForm) invForm.addEventListener('submit', handleInventoryFormSubmit);
+  if (invForm) {
+    invForm.addEventListener('submit', handleInventoryFormSubmit);
+    invForm.addEventListener('input', saveInventoryFormDraft);
+    invForm.addEventListener('change', saveInventoryFormDraft);
+  }
 
   const reportBtn = document.getElementById('generate-report-btn');
   if (reportBtn) reportBtn.addEventListener('click', generateInventoryReport);
@@ -74,10 +83,32 @@ export function initInventoryView() {
     });
   }
 
+  const condHeader = document.getElementById('rep-condition-header');
+  const condDropdown = document.getElementById('rep-condition-dropdown');
+  if (condHeader && condDropdown) {
+    condHeader.addEventListener('click', (e) => {
+      condDropdown.classList.toggle('show');
+      e.stopPropagation();
+    });
+    const updateCondText = () => {
+      const t = [];
+      if (document.getElementById('chk-hide-cancelled').checked) t.push('ซ่อนที่ลบ');
+      if (document.getElementById('chk-hide-packer').checked) t.push('ซ่อนชื่อคนแพ็ค');
+      condHeader.textContent = t.length > 0 ? t.join(', ') : 'เลือกเงื่อนไข...';
+    };
+    document.getElementById('chk-hide-cancelled').addEventListener('change', updateCondText);
+    document.getElementById('chk-hide-packer').addEventListener('change', updateCondText);
+    updateCondText();
+  }
+
   document.addEventListener('click', (e) => {
     const multiSelect = document.getElementById('rep-product-multi-select');
     if (multiSelect && !multiSelect.contains(e.target)) {
       if (repProductDropdown) repProductDropdown.classList.remove('show');
+    }
+    const condSelect = document.getElementById('rep-condition-multi-select');
+    if (condSelect && !condSelect.contains(e.target)) {
+      if (condDropdown) condDropdown.classList.remove('show');
     }
   });
 
@@ -237,6 +268,12 @@ function renderInventoryList(searchTerm = '') {
   entries.forEach(([docId, doc], index) => {
     const tr = document.createElement('tr');
     
+    if (doc.isDeleted) {
+      tr.style.backgroundColor = '#fee2e2'; // red-100
+      tr.style.color = '#ef4444'; // red-500
+    }
+
+    
     // Format date DD/MM/YYYY
     let displayDate = doc.docDate;
     if (displayDate && displayDate.includes('-')) {
@@ -249,13 +286,13 @@ function renderInventoryList(searchTerm = '') {
       <td style="text-align: left;">${index + 1}</td>
       <td style="text-align: left; font-weight: 600; color: var(--primary-color);">${escapeHTML(doc.docNo)}</td>
       <td style="text-align: left;">${escapeHTML(displayDate)}</td>
-      <td style="text-align: left;">${escapeHTML(doc.remark || '')}</td>
       <td style="text-align: left;">${escapeHTML(doc.recordedBy || '-')}</td>
+      <td style="text-align: left;">${escapeHTML(doc.remark || '')}</td>
       <td style="text-align: left;">
         <button class="btn-view-inv" data-id="${docId}" style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 4px; margin-right: 8px;" title="ดูข้อมูล">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
         </button>
-        <button class="btn-del-inv" data-id="${docId}" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="ลบข้อมูล">
+        <button class="btn-del-inv" data-id="${docId}" data-deleted="${doc.isDeleted ? 'true' : 'false'}" style="background: none; border: none; color: ${doc.isDeleted ? '#9ca3af' : '#ef4444'}; cursor: ${doc.isDeleted ? 'not-allowed' : 'pointer'}; padding: 4px;" title="ลบข้อมูล" ${doc.isDeleted ? 'disabled' : ''}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         </button>
       </td>
@@ -299,6 +336,72 @@ function showInventoryList() {
   if (inventoryHeader) inventoryHeader.style.display = '';
 }
 
+function saveInventoryFormDraft() {
+  if (!itemsTableBody) return;
+  const docDate = document.getElementById('inv-doc-date')?.value || '';
+  const user = document.getElementById('inv-doc-user')?.value || '';
+  const remark = document.getElementById('inv-doc-remark')?.value || '';
+
+  const rows = itemsTableBody.querySelectorAll('tr');
+  const items = [];
+  rows.forEach(row => {
+    items.push({
+      pCode: row.querySelector('.item-pcode')?.value || '',
+      pName: row.querySelector('.item-pname')?.value || '',
+      color: row.querySelector('.item-color')?.value || '',
+      qtyIn: row.querySelector('.item-qty-in')?.value || '',
+      qtyOut: row.querySelector('.item-qty-out')?.value || '',
+      lot: row.querySelector('.item-lot')?.value || '',
+      packer: row.querySelector('.item-packer')?.value || ''
+    });
+  });
+
+  const draft = { docDate, user, remark, items };
+  localStorage.setItem('inventoryFormDraft', JSON.stringify(draft));
+}
+
+function loadInventoryFormDraft() {
+  const draftStr = localStorage.getItem('inventoryFormDraft');
+  if (!draftStr) return false;
+  try {
+    const draft = JSON.parse(draftStr);
+    if (!draft.items || draft.items.length === 0) return false;
+
+    if (draft.docDate) document.getElementById('inv-doc-date').value = draft.docDate;
+    if (draft.user) document.getElementById('inv-doc-user').value = draft.user;
+    if (draft.remark) document.getElementById('inv-doc-remark').value = draft.remark;
+    
+    itemsTableBody.innerHTML = ''; 
+    draft.items.forEach(item => {
+      addInventoryItemRow();
+      const lastRow = itemsTableBody.lastElementChild;
+      
+      const pCodeSelect = lastRow.querySelector('.item-pcode');
+      pCodeSelect.value = item.pCode;
+      if (item.pCode) {
+         pCodeSelect.dispatchEvent(new Event('input')); 
+         const autocomplete = document.getElementById('pcode-autocomplete');
+         if (autocomplete) autocomplete.style.display = 'none';
+      }
+      
+      lastRow.querySelector('.item-pname').value = item.pName;
+      const colorSelect = lastRow.querySelector('.item-color');
+      if (colorSelect && item.color) colorSelect.value = item.color;
+      
+      lastRow.querySelector('.item-qty-in').value = item.qtyIn;
+      lastRow.querySelector('.item-qty-out').value = item.qtyOut;
+      lastRow.querySelector('.item-lot').value = item.lot;
+      lastRow.querySelector('.item-packer').value = item.packer;
+    });
+    
+    itemsTableBody.querySelectorAll('.item-qty-in').forEach(el => el.dispatchEvent(new Event('input')));
+    return true;
+  } catch (e) {
+    console.error('Error parsing draft', e);
+    return false;
+  }
+}
+
 async function openInventoryForm() {
   if (inventoryListView) inventoryListView.style.display = 'none';
   if (inventoryFormView) inventoryFormView.style.display = 'block';
@@ -330,8 +433,10 @@ async function openInventoryForm() {
   // Clear user field to force manual input
   document.getElementById('inv-doc-user').value = '';
 
-  // Add one empty row
-  addInventoryItemRow();
+  // Add one empty row or load draft
+  if (!loadInventoryFormDraft()) {
+    addInventoryItemRow();
+  }
 }
 
 async function openInventoryReport() {
@@ -413,14 +518,6 @@ function addInventoryItemRow() {
   const rowId = 'row_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   tr.id = rowId;
 
-  // Prepare product options datalist (only create once)
-  let dataList = document.getElementById('pcode-datalist');
-  if (!dataList) {
-    dataList = document.createElement('datalist');
-    dataList.id = 'pcode-datalist';
-    document.body.appendChild(dataList);
-  }
-  
   const products = getProducts();
   
   const validProducts = {};
@@ -437,23 +534,28 @@ function addInventoryItemRow() {
     });
   }
 
-  dataList.innerHTML = '';
-  Object.keys(validProducts).forEach(pCode => {
-    dataList.innerHTML += `<option value="${escapeHTML(pCode)}">${escapeHTML(validProducts[pCode].pName)}</option>`;
-  });
+  // Create a floating autocomplete container if it doesn't exist
+  let pcodeAutocompleteContainer = document.getElementById('pcode-autocomplete');
+  if (!pcodeAutocompleteContainer) {
+    pcodeAutocompleteContainer = document.createElement('div');
+    pcodeAutocompleteContainer.id = 'pcode-autocomplete';
+    pcodeAutocompleteContainer.style.cssText = 'display: none; position: absolute; z-index: 9999; background: white; border: 1px solid #ccc; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 4px; font-size: 0.95rem; color: #1e293b;';
+    document.body.appendChild(pcodeAutocompleteContainer);
+  }
+
+  const validProductsArr = Object.keys(validProducts).map(code => ({ code, name: validProducts[code].pName }));
 
   tr.innerHTML = `
     <td class="row-number" style="text-align: center; font-weight: bold;"></td>
     <td>
-      <input type="text" list="pcode-datalist" class="search-input item-pcode" style="width: 100%; padding: 0.5rem;" placeholder="รหัสสินค้า" required>
+      <input type="text" class="search-input item-pcode" style="width: 100%; padding: 0.5rem;" placeholder="รหัสสินค้า" autocomplete="off" required>
     </td>
     <td><input type="text" class="search-input item-pname" style="width: 100%; padding: 0.5rem;" placeholder="ชื่อสินค้า" required></td>
     <td><select class="search-input item-color" style="width: 100%; padding: 0.5rem;" required><option value="">ระบุสี</option></select></td>
-    <td><input type="text" class="search-input item-division" style="width: 100%; padding: 0.5rem;" placeholder="สาขา"></td>
-    <td><input type="text" class="search-input item-unit" style="width: 100%; padding: 0.5rem;" placeholder="ตัว/ชิ้น"></td>
-    <td><input type="number" class="search-input item-qty-in" style="width: 100%; padding: 0.5rem;" placeholder="0" min="1" required></td>
-    <td><input type="number" class="search-input item-qty-out" style="width: 100%; padding: 0.5rem;" value="0" min="0"></td>
+    <td><input type="number" class="search-input item-qty-in" style="width: 100%; padding: 0.5rem;" placeholder="0" min="0"></td>
+    <td><input type="number" class="search-input item-qty-out" style="width: 100%; padding: 0.5rem;" placeholder="0" min="0"></td>
     <td><input type="text" class="search-input item-lot" style="width: 100%; padding: 0.5rem;" placeholder="Lot"></td>
+    <td><input type="text" class="search-input item-packer" style="width: 100%; padding: 0.5rem;" placeholder="ชื่อพนักงาน" required></td>
     <td style="text-align: center;"><button type="button" class="btn-remove-row" style="background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.2rem;">&times;</button></td>
   `;
 
@@ -464,8 +566,92 @@ function addInventoryItemRow() {
   const pCodeSelect = tr.querySelector('.item-pcode');
   const pNameInput = tr.querySelector('.item-pname');
   
-  pCodeSelect.addEventListener('input', () => {
+  const qtyInInput = tr.querySelector('.item-qty-in');
+  const qtyOutInput = tr.querySelector('.item-qty-out');
+  
+  const updateQtyValidity = () => {
+    const qIn = parseInt(qtyInInput.value) || 0;
+    const qOut = parseInt(qtyOutInput.value) || 0;
+    if (qIn === 0 && qOut === 0) {
+      qtyInInput.setCustomValidity("กรุณาระบุจำนวน รับ หรือ จ่าย อย่างน้อย 1 ช่อง");
+    } else {
+      qtyInInput.setCustomValidity("");
+    }
+    
+    let anyOut = false;
+    document.querySelectorAll('.item-qty-out').forEach(input => {
+      if ((parseInt(input.value) || 0) > 0) anyOut = true;
+    });
+    const remarkInput = document.getElementById('inv-doc-remark');
+    if (remarkInput) remarkInput.required = anyOut;
+  };
+  
+  qtyInInput.addEventListener('input', updateQtyValidity);
+  qtyOutInput.addEventListener('input', updateQtyValidity);
+  updateQtyValidity();
+  
+  const showAutocomplete = () => {
+    const term = pCodeSelect.value.trim().toLowerCase();
+    pcodeAutocompleteContainer.innerHTML = '';
+    
+    const filtered = validProductsArr.filter(p => p.code.toLowerCase().includes(term) || p.name.toLowerCase().includes(term));
+    if (filtered.length === 0) {
+      pcodeAutocompleteContainer.style.display = 'none';
+      return;
+    }
+    
+    filtered.forEach(p => {
+      const div = document.createElement('div');
+      div.style.padding = '8px 12px';
+      div.style.cursor = 'pointer';
+      div.style.borderBottom = '1px solid #f1f5f9';
+      div.innerHTML = `<strong>${escapeHTML(p.code)}</strong> - ${escapeHTML(p.name)}`;
+      
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        pCodeSelect.value = p.code;
+        pcodeAutocompleteContainer.style.display = 'none';
+        pCodeSelect.dispatchEvent(new Event('input'));
+      });
+      div.addEventListener('mouseover', () => div.style.backgroundColor = '#f8fafc');
+      div.addEventListener('mouseout', () => div.style.backgroundColor = 'transparent');
+      
+      pcodeAutocompleteContainer.appendChild(div);
+    });
+    
+    const rect = pCodeSelect.getBoundingClientRect();
+    pcodeAutocompleteContainer.style.left = `${rect.left + window.scrollX}px`;
+    pcodeAutocompleteContainer.style.top = `${rect.bottom + window.scrollY}px`;
+    pcodeAutocompleteContainer.style.width = `${rect.width}px`;
+    pcodeAutocompleteContainer.style.display = 'block';
+  };
+
+  pCodeSelect.addEventListener('focus', showAutocomplete);
+
+  pCodeSelect.addEventListener('blur', () => {
+    pcodeAutocompleteContainer.style.display = 'none';
     const selectedCode = pCodeSelect.value.trim();
+    if (selectedCode && !validProducts[selectedCode]) {
+      alert("ข้อมูลนี้ไม่ถูกต้อง หรือยังไม่มีข้อมูลนี้อยู่ใน google sheet");
+      pCodeSelect.value = '';
+      pNameInput.value = '';
+      const colorSelect = tr.querySelector('.item-color');
+      if (colorSelect) colorSelect.innerHTML = '<option value="">ระบุสี</option>';
+    }
+  });
+
+  const tc = document.querySelector('.table-container');
+  if (tc && !tc.dataset.hasScrollListener) {
+    tc.addEventListener('scroll', () => {
+      if (pcodeAutocompleteContainer) pcodeAutocompleteContainer.style.display = 'none';
+    });
+    tc.dataset.hasScrollListener = 'true';
+  }
+
+  pCodeSelect.addEventListener('input', () => {
+    showAutocomplete();
+    const selectedCode = pCodeSelect.value.trim();
+    
     if (selectedCode && validProducts[selectedCode]) {
       pNameInput.value = validProducts[selectedCode].pName || '';
     } else {
@@ -501,26 +687,28 @@ function addInventoryItemRow() {
     }
   });
 
-  pCodeSelect.addEventListener('change', () => {
-    const selectedCode = pCodeSelect.value.trim();
-    if (selectedCode && !validProducts[selectedCode]) {
-      alert("ข้อมูลนี้ไม่ถูกต้อง หรือยังไม่มีข้อมูลนี้อยู่ใน google sheet");
-      pCodeSelect.value = '';
-      pNameInput.value = '';
-      const colorSelect = tr.querySelector('.item-color');
-      if (colorSelect) colorSelect.innerHTML = '<option value="">ระบุสี</option>';
-    }
-  });
+  // blur handles the validation now
 
   // Remove row handler
   tr.querySelector('.btn-remove-row').addEventListener('click', () => {
     if (itemsTableBody.children.length > 1) {
       tr.remove();
       updateRowNumbers();
+      
+      let anyOut = false;
+      document.querySelectorAll('.item-qty-out').forEach(input => {
+        if ((parseInt(input.value) || 0) > 0) anyOut = true;
+      });
+      const remarkInput = document.getElementById('inv-doc-remark');
+      if (remarkInput) remarkInput.required = anyOut;
+      saveInventoryFormDraft();
     } else {
       alert("ต้องมีรายการสินค้าอย่างน้อย 1 รายการ");
     }
   });
+  
+  // Save when a new row is initially added
+  saveInventoryFormDraft();
 }
 
 async function handleInventoryFormSubmit(e) {
@@ -552,8 +740,7 @@ async function handleInventoryFormSubmit(e) {
     const pCodeSelect = row.querySelector('.item-pcode');
     const pNameInput = row.querySelector('.item-pname');
     const colorSelect = row.querySelector('.item-color');
-    const divisionInput = row.querySelector('.item-division');
-    const unitInput = row.querySelector('.item-unit');
+    const packerInput = row.querySelector('.item-packer');
     const lotInput = row.querySelector('.item-lot');
     const qtyInInput = row.querySelector('.item-qty-in');
     const qtyOutInput = row.querySelector('.item-qty-out');
@@ -587,8 +774,8 @@ async function handleInventoryFormSubmit(e) {
       pCode: pCodeSelect.value,
       pName: pNameInput.value.trim(),
       color: colorSelect ? colorSelect.value : '',
-      division: divisionInput.value.trim(),
-      unit: unitInput.value.trim(),
+      packerName: packerInput.value.trim(),
+      unit: "ตัว",
       lot: lotInput.value.trim(),
       qtyIn: qtyIn,
       qtyOut: qtyOut
@@ -603,6 +790,49 @@ async function handleInventoryFormSubmit(e) {
   if (items.length === 0) {
     alert("ต้องมีรายการสินค้าอย่างน้อย 1 รายการ");
     return;
+  }
+
+  // Check for negative stock
+  const currentStock = {};
+  if (state.inventoryAdjustments) {
+    state.inventoryAdjustments.forEach(entry => {
+      if (entry && entry.items) {
+        if (entry.isDeleted) return;
+        entry.items.forEach(item => {
+           const key = `${item.pCode}|${item.color || ''}`;
+           if (!currentStock[key]) currentStock[key] = 0;
+           currentStock[key] += (Number(item.qtyIn) || 0) - (Number(item.qtyOut) || 0);
+        });
+      } else if (entry && typeof entry === 'object') {
+        Object.values(entry).forEach(subDoc => {
+          if (subDoc && subDoc.items) {
+            if (subDoc.isDeleted) return;
+            subDoc.items.forEach(item => {
+               const key = `${item.pCode}|${item.color || ''}`;
+               if (!currentStock[key]) currentStock[key] = 0;
+               currentStock[key] += (Number(item.qtyIn) || 0) - (Number(item.qtyOut) || 0);
+            });
+          }
+        });
+      }
+    });
+  }
+
+  let hasNegativeStockWarning = false;
+  items.forEach(item => {
+    if (item.qtyOut > 0) {
+      const key = `${item.pCode}|${item.color || ''}`;
+      const stock = currentStock[key] || 0;
+      if (item.qtyOut > stock) {
+        hasNegativeStockWarning = true;
+      }
+    }
+  });
+
+  if (hasNegativeStockWarning) {
+    if (!confirm("จำนวนสต๊อกน้อยกว่าจำนวนจ่าย ถ้ากดตกลง เลขสต๊อกก็จะติดลบ ต้องการทำรายการต่อหรือไม่?")) {
+      return;
+    }
   }
 
   const saveBtn = document.getElementById('save-inventory-btn');
@@ -626,6 +856,7 @@ async function handleInventoryFormSubmit(e) {
   
   if (result.success) {
     alert('บันทึกเอกสารเรียบร้อยแล้ว');
+    localStorage.removeItem('inventoryFormDraft');
     showInventoryList();
     loadInventoryAdjustments();
   } else {
@@ -641,6 +872,9 @@ function generateInventoryReport() {
   const endDate = document.getElementById('rep-end-date').value;
   // productSelect is now managed by selectedReportProducts state array
   const groupRadio = document.querySelector('input[name="rep_group"]:checked').value;
+  const hideCancelled = document.getElementById('chk-hide-cancelled').checked;
+  const hidePacker = document.getElementById('chk-hide-packer').checked;
+  
   const container = document.getElementById('report-results-container');
   const printBtn = document.getElementById('print-report-btn');
   
@@ -656,10 +890,10 @@ function generateInventoryReport() {
   if (adjustmentsCache) {
     Object.values(adjustmentsCache).forEach(val => {
       if (val && val.docNo) {
-        flatEntries.push(val);
+        if (!hideCancelled || !val.isDeleted) flatEntries.push(val);
       } else if (val && typeof val === 'object') {
         Object.values(val).forEach(subVal => {
-          if (subVal && subVal.docNo) flatEntries.push(subVal);
+          if (subVal && subVal.docNo && (!hideCancelled || !subVal.isDeleted)) flatEntries.push(subVal);
         });
       }
     });
@@ -685,17 +919,40 @@ function generateInventoryReport() {
     return `${p[2]}/${p[1]}/${p[0]}`;
   };
 
-  // Aggregate Data
   let reportHtml = `<div class="printable-report" style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color); color: #000;">`;
   reportHtml += `<style>
     @media print {
       body * { visibility: hidden; }
       .printable-report, .printable-report * { visibility: visible; }
-      .printable-report { position: absolute; left: 0; top: 0; width: 100%; border: none; }
+      .printable-report { position: absolute; left: 0; top: 0; width: 100%; border: none; font-size: 9px !important; line-height: 1.1 !important; }
+      .printable-report table { font-size: 9px !important; }
+      .printable-report th { font-size: 9px !important; padding: 1px 0 !important; border-bottom: 1px solid #000 !important; }
+      .printable-report td { font-size: 9px !important; padding: 1px 0 !important; }
+      .printable-report h3 { font-size: 12px !important; margin-bottom: 2px !important; }
+      .printable-report p { font-size: 9px !important; margin-bottom: 4px !important; line-height: 1.2 !important; }
+      .printable-report td span { font-size: 9px !important; }
+      .printable-report > div { margin-bottom: 6px !important; } 
+      .printable-report div[style*="font-size: 1.1rem"] { font-size: 10px !important; margin-bottom: 1px !important; gap: 1rem !important; font-weight: bold; }
+      .printable-report div[style*="font-size: 1.2rem"] { font-size: 11px !important; padding: 4px !important; margin-bottom: 0 !important; border: none !important; }
     }
   </style>`;
+  
+  let condTexts = [];
+  if (hideCancelled) condTexts.push('ไม่แสดงรายการที่ลบ');
+  if (hidePacker) condTexts.push('ไม่แสดงคนแพ็ค');
+  const condStr = condTexts.length > 0 ? condTexts.join(', ') : 'ไม่มี';
+  
+  let prodStr = selectedReportProducts.includes('all') ? 'ทั้งหมด' : `${selectedReportProducts.length} รายการ`;
+  let groupStr = groupRadio === 'Date' ? 'สรุปตามวันที่' : (groupRadio === 'Product' ? 'สรุปตามสินค้า' : 'สรุปตาม Lot');
+
   reportHtml += `<h3 style="margin-bottom: 0.5rem; text-align: center;">รายงานใบปรับปรุงยอดสินค้า</h3>`;
-  reportHtml += `<p style="text-align: center; margin-bottom: 1.5rem; color: #475569;">ตั้งแต่ ${formatD(startDate)} ถึง ${formatD(endDate)}</p>`;
+  reportHtml += `<p style="text-align: center; margin-bottom: 1.5rem; color: #475569; line-height: 1.5;">
+    วันที่: <strong>${formatD(startDate)} ถึง ${formatD(endDate)}</strong><br>
+    รูปแบบ: <strong>${groupStr}</strong> | สินค้า: <strong>${prodStr}</strong> | เงื่อนไข: <strong>${condStr}</strong>
+  </p>`;
+  
+  const packerTh = hidePacker ? '' : '<th style="padding: 8px 4px; border: none; width: 15%;">พนักงานแพ็คสินค้า</th>';
+  const packerTd = (val) => hidePacker ? '' : `<td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${val || '-'}</td>`;
   
   if (groupRadio === 'Date') {
     let totalQtyIn = 0;
@@ -717,11 +974,10 @@ function generateInventoryReport() {
               <th style="padding: 8px 4px; border: none; width: 12%;">รหัสสินค้า</th>
               <th style="padding: 8px 4px; border: none; width: 25%;">ชื่อสินค้า</th>
               <th style="padding: 8px 4px; border: none; width: 10%;">สี</th>
-              <th style="padding: 8px 4px; border: none; width: 15%;">สาขา</th>
-              <th style="padding: 8px 4px; border: none; width: 8%;">หน่วยนับ</th>
               <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">รับ</th>
               <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">จ่าย</th>
               <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">Lot</th>
+              ${packerTh}
             </tr></thead>
             <tbody>`;
             
@@ -732,15 +988,17 @@ function generateInventoryReport() {
           let qtyInText = item.qtyIn ? `<span style="color: #166534;">${Number(item.qtyIn)}</span>` : '-';
           let qtyOutText = item.qtyOut ? `<span style="color: #b91c1c;">${Number(item.qtyOut)}</span>` : '-';
           
-          reportHtml += `<tr>
+          let trStyle = "";
+          if (doc.isDeleted) trStyle = "text-decoration: line-through; color: #ef4444; opacity: 0.6;";
+          
+          reportHtml += `<tr style="${trStyle}">
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.pCode}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.pName}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.color || '-'}</td>
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.division || '-'}</td>
-            <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${item.unit || '-'}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
             <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${item.lot || '-'}</td>
+            ${packerTd(item.packerName)}
           </tr>`;
         });
         
@@ -768,9 +1026,9 @@ function generateInventoryReport() {
           grandTotalIn += (item.qtyIn || 0);
           grandTotalOut += (item.qtyOut || 0);
           productGroups[item.pCode].details.push({ 
-            date: doc.docDate, docNo: doc.docNo, 
+            date: doc.docDate, docNo: doc.docNo, isDeleted: doc.isDeleted,
             qtyIn: (item.qtyIn || 0), qtyOut: (item.qtyOut || 0), 
-            division: item.division, lot: item.lot,
+            packerName: item.packerName, lot: item.lot,
             color: item.color, unit: item.unit
           });
         }
@@ -788,30 +1046,32 @@ function generateInventoryReport() {
             <th style="padding: 8px 4px; border: none; width: 12%;">วันที่</th>
             <th style="padding: 8px 4px; border: none; width: 18%;">เลขที่เอกสาร</th>
             <th style="padding: 8px 4px; border: none; width: 10%;">สี</th>
-            <th style="padding: 8px 4px; border: none; width: 15%;">สาขา</th>
-            <th style="padding: 8px 4px; border: none; width: 8%;">หน่วยนับ</th>
             <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">รับ</th>
             <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">จ่าย</th>
             <th style="padding: 8px 4px; border: none; width: 17%; text-align: right;">Lot</th>
+            ${packerTh}
           </tr></thead><tbody>`;
           
       g.details.sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
         let qtyInText = d.qtyIn ? `<span style="color: #166534;">${Number(d.qtyIn)}</span>` : '-';
         let qtyOutText = d.qtyOut ? `<span style="color: #b91c1c;">${Number(d.qtyOut)}</span>` : '-';
         
-        reportHtml += `<tr>
+        let trStyle = "";
+        if (d.isDeleted) trStyle = "text-decoration: line-through; color: #ef4444; opacity: 0.6;";
+        
+        reportHtml += `<tr style="${trStyle}">
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${formatD(d.date)}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.docNo}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.color || '-'}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.division || '-'}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.unit || '-'}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${d.lot || '-'}</td>
+          ${packerTd(d.packerName)}
         </tr>`;
       });
+      const colspanValue = hidePacker ? 3 : 4;
       reportHtml += `<tr style="font-weight: bold; color: #1e293b;">
-        <td colspan="5" style="padding: 8px 4px; text-align: right;">รวมสินค้านี้</td>
+        <td colspan="${colspanValue}" style="padding: 8px 4px; text-align: right;">รวมสินค้านี้</td>
         <td style="padding: 8px 4px; text-align: right; color: #166534;">${Number(g.totalIn)}</td>
         <td style="padding: 8px 4px; text-align: right; color: #b91c1c;">${Number(g.totalOut)}</td>
         <td style="padding: 8px 4px;"></td>
@@ -840,9 +1100,10 @@ function generateInventoryReport() {
           grandTotalIn += (item.qtyIn || 0);
           grandTotalOut += (item.qtyOut || 0);
           lotGroups[lotKey].details.push({ 
-            date: doc.docDate, docNo: doc.docNo, pCode: item.pCode, pName: item.pName, color: item.color,
+            date: doc.docDate, docNo: doc.docNo, isDeleted: doc.isDeleted,
+            pCode: item.pCode, pName: item.pName, color: item.color,
             qtyIn: (item.qtyIn || 0), qtyOut: (item.qtyOut || 0), 
-            division: item.division, unit: item.unit
+            packerName: item.packerName, unit: item.unit
           });
         }
       });
@@ -859,28 +1120,30 @@ function generateInventoryReport() {
             <th style="padding: 8px 4px; border: none; width: 12%;">วันที่</th>
             <th style="padding: 8px 4px; border: none; width: 18%;">เลขที่เอกสาร</th>
             <th style="padding: 8px 4px; border: none; width: 25%;">รหัส/ชื่อสินค้า</th>
-            <th style="padding: 8px 4px; border: none; width: 15%;">สาขา</th>
-            <th style="padding: 8px 4px; border: none; width: 10%;">หน่วยนับ</th>
             <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">รับ</th>
             <th style="padding: 8px 4px; border: none; width: 10%; text-align: right;">จ่าย</th>
+            ${packerTh}
           </tr></thead><tbody>`;
           
       g.details.sort((a,b) => a.date.localeCompare(b.date)).forEach(d => {
         let qtyInText = d.qtyIn ? `<span style="color: #166534;">${Number(d.qtyIn)}</span>` : '-';
         let qtyOutText = d.qtyOut ? `<span style="color: #b91c1c;">${Number(d.qtyOut)}</span>` : '-';
         
-        reportHtml += `<tr>
+        let trStyle = "";
+        if (d.isDeleted) trStyle = "text-decoration: line-through; color: #ef4444; opacity: 0.6;";
+        
+        reportHtml += `<tr style="${trStyle}">
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${formatD(d.date)}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.docNo}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.pCode} - ${d.pName}${d.color ? ` (${d.color})` : ''}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.division || '-'}</td>
-          <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; vertical-align: top;">${d.unit || '-'}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyInText}</td>
           <td style="padding: 6px 4px; border-bottom: 1px dashed #e2e8f0; text-align: right; vertical-align: top;">${qtyOutText}</td>
+          ${packerTd(d.packerName)}
         </tr>`;
       });
+      const colspanValue = hidePacker ? 3 : 4;
       reportHtml += `<tr style="font-weight: bold; color: #1e293b;">
-        <td colspan="5" style="padding: 8px 4px; text-align: right;">รวม Lot นี้</td>
+        <td colspan="${colspanValue}" style="padding: 8px 4px; text-align: right;">รวม Lot นี้</td>
         <td style="padding: 8px 4px; text-align: right; color: #166534;">${Number(g.totalIn)}</td>
         <td style="padding: 8px 4px; text-align: right; color: #b91c1c;">${Number(g.totalOut)}</td>
       </tr>`;
@@ -945,20 +1208,20 @@ function viewInventoryDetails(docIdToFind) {
           <thead>
             <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
               <th style="padding: 10px; border: 1px solid #cbd5e1;">รหัส/ชื่อสินค้า</th>
-              <th style="padding: 10px; border: 1px solid #cbd5e1;">สาขา</th>
-              <th style="padding: 10px; border: 1px solid #cbd5e1;">Lot</th>
               <th style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: #166534;">รับ</th>
               <th style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; color: #b91c1c;">จ่าย</th>
+              <th style="padding: 10px; border: 1px solid #cbd5e1;">Lot</th>
+              <th style="padding: 10px; border: 1px solid #cbd5e1;">พนักงานแพ็คสินค้า</th>
             </tr>
           </thead>
           <tbody>
             ${(foundDoc.items || []).map(item => `
               <tr>
                 <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.pCode} - ${item.pName}${item.color ? ` (${item.color})` : ''}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.division || '-'}</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #166534;">${item.qtyIn || 0}</td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #b91c1c;">${item.qtyOut || 0}</td>
                 <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.lot || '-'}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #166534;">${item.qtyIn || 0} <span style="font-weight: normal; font-size: 0.85em; color: #64748b;">${item.unit || ''}</span></td>
-                <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #b91c1c;">${item.qtyOut || 0} <span style="font-weight: normal; font-size: 0.85em; color: #64748b;">${item.unit || ''}</span></td>
+                <td style="padding: 8px; border: 1px solid #cbd5e1;">${item.packerName || '-'}</td>
               </tr>
             `).join('')}
           </tbody>

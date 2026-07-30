@@ -14,7 +14,7 @@ export const state = {
   activeCategories: new Set(),
   currentCategories: ['all'],
   isPresentationMode: false,
-  showOnlyActive: true,
+  showOnlyActive: false,
   showOnlyStock: false,
   customCategoryOrder: [],
   storeSearchDebounceTimeout: null,

@@ -14,6 +14,18 @@
   <!-- Stylesheet -->
   <link rel="stylesheet" href="assets/style.css?v=2">
   
+  <style>
+    /* Hide number input spin buttons */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+  </style>
+  
   <!-- SheetJS for Excel Import -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -143,7 +155,7 @@
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <div class="control-group toggle-group" style="margin-bottom: 0;">
                     <label class="toggle-switch">
-                      <input type="checkbox" id="active-only-toggle" checked>
+                      <input type="checkbox" id="active-only-toggle">
                       <span class="slider round"></span>
                     </label>
                     <span class="toggle-label">แสดงเฉพาะสินค้าที่มีออเดอร์</span>
@@ -349,7 +361,7 @@
                 <div class="product-action-buttons" style="display: flex; gap: 8px;">
                   <button id="delete-selected-inv-btn" class="btn-primary" style="min-height: 38px; background-color: #ef4444; border-color: #ef4444; display: none;">ลบที่เลือก (0)</button>
                   <button id="add-inventory-btn" class="btn-primary" style="min-height: 38px;">+ เพิ่มข้อมูล</button>
-                  <button id="report-inventory-btn" style="min-height: 38px; border: 1px solid #cbd5e1; color: #334155; background-color: white; border-radius: 8px; padding: 0 1rem; font-weight: 500; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">รายงาน</button>
+                  <button id="report-inventory-btn" class="btn-primary" style="min-height: 38px; background-color: #8b5cf6; border-color: #8b5cf6;">รายงาน</button>
                 </div>
               </div>
             </div>
@@ -368,8 +380,8 @@
                           <th style="text-align: left;">ลำดับ</th>
                           <th style="text-align: left;">เลขที่เอกสาร</th>
                           <th style="text-align: left;">วันที่เอกสาร</th>
-                          <th style="text-align: left;">หมายเหตุ</th>
                           <th style="text-align: left;">ผู้บันทึก</th>
+                          <th style="text-align: left;">หมายเหตุ</th>
                           <th style="text-align: left;">จัดการ</th>
                         </tr>
                       </thead>
@@ -403,7 +415,7 @@
                   </div>
                   <div class="form-group">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">วันที่ <span style="color: red;">*</span></label>
-                    <input type="date" id="inv-doc-date" class="search-input" style="width: 100%; padding: 0.75rem; background-color: #f1f5f9; color: #1e293b; pointer-events: none; cursor: not-allowed;" required readonly>
+                    <input type="date" id="inv-doc-date" class="search-input" style="width: 100%; padding: 0.75rem;" required>
                   </div>
                   <div class="form-group">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">ชื่อผู้ลงบันทึก <span style="color: red;">*</span></label>
@@ -426,13 +438,12 @@
                         <tr>
                           <th style="width: 5%; padding: 0.75rem 0.5rem;">ลำดับ</th>
                           <th style="width: 10%; padding: 0.75rem 0.5rem;">รหัสสินค้า</th>
-                          <th style="width: 25%; padding: 0.75rem 0.5rem;">ชื่อสินค้า</th>
+                          <th style="width: 20%; padding: 0.75rem 0.5rem;">ชื่อสินค้า</th>
                           <th style="width: 10%; padding: 0.75rem 0.5rem;">สี</th>
-                          <th style="width: 10%; padding: 0.75rem 0.5rem;">สาขา</th>
-                          <th style="width: 10%; padding: 0.75rem 0.5rem;">หน่วยนับ</th>
-                          <th style="width: 10%; padding: 0.75rem 0.5rem;">รับ</th>
-                          <th style="width: 10%; padding: 0.75rem 0.5rem;">จ่าย</th>
-                          <th style="width: 5%; padding: 0.75rem 0.5rem;">Lot</th>
+                          <th style="width: 7%; padding: 0.75rem 0.5rem;">รับ</th>
+                          <th style="width: 7%; padding: 0.75rem 0.5rem;">จ่าย</th>
+                          <th style="width: 13%; padding: 0.75rem 0.5rem;">Lot</th>
+                          <th style="width: 15%; padding: 0.75rem 0.5rem;">พนักงานแพ็คสินค้า</th>
                           <th style="width: 5%; padding: 0.75rem 0.5rem; text-align: center;">ลบ</th>
                         </tr>
                       </thead>
@@ -462,7 +473,10 @@
               <div class="category-card" style="padding: 2rem; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                   <h3 style="font-size: 1.25rem;">รายงานใบปรับปรุงยอดสินค้า</h3>
-                  <button id="back-from-report-btn" class="btn-primary" style="display: none; background-color: #64748b; border-color: #64748b;">ย้อนกลับ</button>
+                  <div>
+                    <button id="print-report-btn" class="btn-primary" style="padding: 0.5rem 1.5rem; background-color: #10b981; border-color: #10b981; display: none; margin-right: 1rem;">พิมพ์รายงาน (Print)</button>
+                    <button id="back-from-report-btn" class="btn-primary" style="display: none; background-color: #64748b; border-color: #64748b;">ย้อนกลับ</button>
+                  </div>
                 </div>
                 
                 <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
@@ -490,6 +504,24 @@
                       </div>
                     </div>
                   </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">เงื่อนไขเพิ่มเติม</label>
+                    <div class="multi-select-container" id="rep-condition-multi-select">
+                      <div class="multi-select-header" id="rep-condition-header" style="padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; background: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        เลือกเงื่อนไข...
+                      </div>
+                      <div class="multi-select-options-wrapper" id="rep-condition-dropdown">
+                        <div class="multi-select-options" id="rep-condition-options">
+                          <label class="multi-select-option" style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer;">
+                            <input type="checkbox" id="chk-hide-cancelled" checked style="margin-right: 8px;"> ไม่แสดงรายการที่ลบ
+                          </label>
+                          <label class="multi-select-option" style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer;">
+                            <input type="checkbox" id="chk-hide-packer" style="margin-right: 8px;"> ไม่แสดงชื่อพนักงานแพ็คสินค้า
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div style="display: flex; gap: 1.5rem; margin-bottom: 2rem;">
@@ -500,7 +532,6 @@
 
                 <div style="display: flex; gap: 1rem;">
                   <button id="generate-report-btn" class="btn-primary" style="padding: 0.75rem 2rem; background-color: #a855f7; border-color: #a855f7; flex: 1;">ค้นหาเอกสาร</button>
-                  <button id="print-report-btn" class="btn-primary" style="padding: 0.75rem 2rem; background-color: #10b981; border-color: #10b981; flex: 1; display: none;">พิมพ์รายงาน (Print)</button>
                 </div>
               </div>
 

@@ -73,6 +73,7 @@ export function processData() {
     state.inventoryAdjustments.forEach(entry => {
       // flat structure
       if (entry && entry.items) {
+        if (entry.isDeleted) return; // Skip deleted items
         entry.items.forEach(item => {
            const key = `${item.pCode}|${item.color || ''}`;
            if (!adjustmentsMap[key]) adjustmentsMap[key] = 0;
@@ -83,6 +84,7 @@ export function processData() {
       else if (entry && typeof entry === 'object') {
         Object.values(entry).forEach(subDoc => {
           if (subDoc && subDoc.items) {
+            if (subDoc.isDeleted) return; // Skip deleted items
             subDoc.items.forEach(item => {
                const key = `${item.pCode}|${item.color || ''}`;
                if (!adjustmentsMap[key]) adjustmentsMap[key] = 0;
