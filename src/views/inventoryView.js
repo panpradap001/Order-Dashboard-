@@ -373,7 +373,7 @@ function loadInventoryFormDraft() {
     const draft = JSON.parse(draftStr);
     if (!draft.items || draft.items.length === 0) return false;
 
-    if (draft.docDate) document.getElementById('inv-doc-date').value = draft.docDate;
+    // if (draft.docDate) document.getElementById('inv-doc-date').value = draft.docDate;
     if (draft.user) document.getElementById('inv-doc-user').value = draft.user;
     if (draft.remark) document.getElementById('inv-doc-remark').value = draft.remark;
     
@@ -434,7 +434,8 @@ async function openInventoryForm() {
   document.getElementById('inv-doc-no').value = nextDocNo;
   
   // Default date
-  document.getElementById('inv-doc-date').value = dateObj.toISOString().split('T')[0];
+  const localDateStr = new Date(dateObj.getTime() - dateObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  document.getElementById('inv-doc-date').value = localDateStr;
   
   // Clear user field to force manual input
   document.getElementById('inv-doc-user').value = '';

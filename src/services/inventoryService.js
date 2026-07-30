@@ -1,4 +1,4 @@
-import { ref as dbRef, get, set, remove, update, query, orderByChild, onValue, runTransaction } from "firebase/database";
+import { ref as dbRef, get, set, remove, update, query, orderByChild, limitToLast, onValue, runTransaction } from "firebase/database";
 import { database } from "../config/firebase.js";
 
 /**
@@ -86,76 +86,39 @@ export async function generateNextDocNo() {
   try {
     const fullYear = new Date().getFullYear();
     const prefix = `AI-${fullYear}/`;
-    const counterRef = dbRef(database, `inventory_counters/${fullYear}`);
     
-    // Check if counter exists; if not, initialize from existing documents
-    const counterSnap = await get(counterRef);
-    if (!counterSnap.exists()) {
-      const maxFromDocs = await findMaxDocNumber(fullYear);
-      await set(counterRef, maxFromDocs);
+    // ดึงข้อมูลเอกสารใบเดียวที่เลขมากที่สุดมาเลย
+    const invRef = dbRef(database, 'inventory_adjustments');
+    const lastDocQuery = query(invRef, orderByChild('docNo'), limitToLast(1));
+    const snapshot = await get(lastDocQuery);
+    
+    let maxNumber = 0;
+    
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      Object.keys(data).forEach(key => {
+        const docNo = data[key]?.docNo || "";
+        if (docNo.startsWith(prefix)) {
+          const parts = docNo.split('/');
+          if (parts.length === 2) {
+            const num = parseInt(parts[1], 10);
+            if (!isNaN(num) && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        }
+      });
     }
     
-    // Atomically increment the counter using Firebase Transaction
-    const result = await runTransaction(counterRef, (currentValue) => {
-      return (currentValue || 0) + 1;
-    });
-    
-    if (result.committed) {
-      const nextNumber = result.snapshot.val();
-      const formattedNumber = String(nextNumber).padStart(4, '0');
-      return `${prefix}${formattedNumber}`;
-    } else {
-      throw new Error('Transaction not committed');
-    }
+    const nextNumber = maxNumber + 1;
+    // Format to 4 digits (e.g., 0001)
+    const formattedNumber = String(nextNumber).padStart(4, '0');
+    return `${prefix}${formattedNumber}`;
     
   } catch (error) {
     console.error("Error generating next doc no:", error);
-    // Fallback: use timestamp-based unique number to avoid collision
+    // Fallback if error
     const fullYear = new Date().getFullYear();
-    const timestamp = Date.now().toString().slice(-6);
-    return `AI-${fullYear}/T${timestamp}`;
+    return `AI-${fullYear}/0001`;
   }
-}
-
-/**
- * Scan existing documents to find the maximum document number for a given year.
- * Used to initialize the counter on first use.
- */
-async function findMaxDocNumber(fullYear) {
-  const prefix = `AI-${fullYear}/`;
-  const adjustments = await getInventoryAdjustments();
-  
-  // Flatten nested objects caused by previous bug with '/'
-  const flatAdjustments = {};
-  if (adjustments) {
-    Object.keys(adjustments).forEach(key => {
-      const val = adjustments[key];
-      if (val && val.docNo) {
-        flatAdjustments[key] = val;
-      } else if (val && typeof val === 'object') {
-        Object.keys(val).forEach(subKey => {
-          if (val[subKey] && val[subKey].docNo) {
-            flatAdjustments[`${key}_${subKey}`] = val[subKey];
-          }
-        });
-      }
-    });
-  }
-  
-  let maxNumber = 0;
-  
-  Object.keys(flatAdjustments).forEach(key => {
-    const docNo = flatAdjustments[key].docNo || "";
-    if (docNo.startsWith(prefix)) {
-      const parts = docNo.split('/');
-      if (parts.length === 2) {
-        const num = parseInt(parts[1], 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
-        }
-      }
-    }
-  });
-  
-  return maxNumber;
 }
