@@ -1139,10 +1139,43 @@ body.presentation-mode .category-card:active {
 .sidebar.collapsed .nav-category,
 .sidebar.collapsed .theme-toggle,
 .sidebar.collapsed .logout-text {
-  transition: opacity 0.08s ease 0s, visibility 0s linear 0.08s;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none;
+  display: none !important;
+}
+
+/* Layout overrides when collapsed */
+.sidebar.collapsed .sidebar-header,
+.sidebar.collapsed .sidebar-nav,
+.sidebar.collapsed .sidebar-footer {
+  width: 80px;
+  min-width: 80px;
+  padding-left: 0;
+  padding-right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  gap: 1.5rem;
+}
+
+.sidebar.collapsed .sidebar-nav {
+  padding-top: 1rem;
+}
+
+.sidebar.collapsed .nav-item {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  margin: 0 auto 0.5rem auto;
+}
+
+.sidebar.collapsed .profile-wrapper {
+  justify-content: center;
+  padding: 0;
 }
 
 .desktop-toggle {
@@ -1168,6 +1201,7 @@ body.presentation-mode .category-card:active {
 }
 .sidebar.collapsed .header-logo {
   flex-direction: column;
+  gap: 0;
 }
 
 /* Mobile Header & Overlay */
