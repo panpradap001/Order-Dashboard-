@@ -202,13 +202,9 @@ export async function updateUsername(uid, username) {
 }
 
 // Listen for users updates (for User Management Table)
-let usersUnsubscribe = null;
 export function listenForUsers(callback) {
-  if (usersUnsubscribe) {
-    usersUnsubscribe();
-  }
   const usersRef = ref(database, 'users');
-  usersUnsubscribe = onValue(usersRef, (snapshot) => {
+  onValue(usersRef, (snapshot) => {
     const users = [];
     snapshot.forEach((childSnap) => {
       const val = childSnap.val();

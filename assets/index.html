@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="./assets/images/logo.jpg">
+  <title>My Panel</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="assets/style.css?v=3">
+  
+  <style>
+    /* Hide number input spin buttons */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+  </style>
+  
+  <!-- SheetJS for Excel Import -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen" style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--bg-color); padding: 1rem;">
+    <div style="background-color: var(--surface-color); padding: 2.5rem; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px;">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="./assets/images/logo.jpg" alt="Logo" style="width: 72px; height: 72px; border-radius: 12px; margin-bottom: 1rem; object-fit: cover;">
+        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-primary);">ยินดีต้อนรับ</h2>
+        <p style="color: var(--text-secondary); font-size: 0.95rem;">เข้าสู่ระบบ Management</p>
+      </div>
+      <form id="login-form">
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">ชื่อผู้ใช้งาน</label>
+          <input type="text" id="login-username" class="search-input" style="width: 100%; padding: 0.75rem;" placeholder="ระบุชื่อผู้ใช้งาน" required>
+        </div>
+        <div style="margin-bottom: 1.5rem;">
+          <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">รหัสผ่าน</label>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" id="login-password" class="search-input" style="width: 100%; padding: 0.75rem; padding-right: 2.75rem;" placeholder="กรอกรหัสผ่าน..." required>
+            <button type="button" id="toggle-login-password" style="position: absolute; right: 0.75rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; transition: color 0.2s;" title="แสดง/ซ่อนรหัสผ่าน">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
+        <div id="login-error" style="color: #ef4444; font-size: 0.875rem; margin-bottom: 1rem; display: none; text-align: center;"></div>
+        <button type="submit" id="login-submit-btn" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem;">เข้าสู่ระบบ</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-layout" id="app-layout" style="display: none;">
+    
+    <!-- Mobile Header (Visible only on mobile) -->
+    <div class="mobile-header">
+      <button class="mobile-toggle" id="mobile-toggle-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <h1>My Panel</h1>
+    </div>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="sidebar-header">
+        <div class="header-logo">
+          <div class="logo-icon">
+            <img src="./assets/images/logo.jpg" alt="Company Logo" style="width: 100%; height: 100%; border-radius: 4px; object-fit: cover; display: block;">
+          </div>
+          <h2>My Panel</h2>
+        </div>
+        <button id="desktop-toggle-btn" class="desktop-toggle" title="ย่อ/ขยายเมนู">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-category">OVERVIEW</div>
+        <button class="nav-item active" data-view="view-dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>สรุปออเดอร์รวม</span>
+        </button>
+        <button class="nav-item" data-view="view-inventory">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>ปรับปรุงยอดสินค้า</span>
+        </button>
+        <button class="nav-item" data-view="view-store">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+            <path d="M2 9.78c0-.44.28-.8.61-1.05l1.36-1.03a1.39 1.39 0 0 1 1.67 0l1.36 1.03c.33.25.61.61.61 1.05 0 1.25-.97 2.22-2.17 2.22S2 11.03 2 9.78z" />
+            <path d="M6 9.78c0-.44.28-.8.61-1.05l1.36-1.03a1.39 1.39 0 0 1 1.67 0l1.36 1.03c.33.25.61.61.61 1.05 0 1.25-.97 2.22-2.17 2.22S6 11.03 6 9.78z" />
+            <path d="M10 9.78c0-.44.28-.8.61-1.05l1.36-1.03a1.39 1.39 0 0 1 1.67 0l1.36 1.03c.33.25.61.61.61 1.05 0 1.25-.97 2.22-2.17 2.22s-2.17-.97-2.17-2.22z" />
+            <path d="M14 9.78c0-.44.28-.8.61-1.05l1.36-1.03a1.39 1.39 0 0 1 1.67 0l1.36 1.03c.33.25.61.61.61 1.05 0 1.25-.97 2.22-2.17 2.22s-2.17-.97-2.17-2.22z" />
+            <path d="M18 9.78c0-.44.28-.8.61-1.05l1.36-1.03a1.39 1.39 0 0 1 1.67 0l1.36 1.03c.33.25.61.61.61 1.05 0 1.25-.97 2.22-2.17 2.22s-2.17-.97-2.17-2.22z" />
+          </svg>
+          <span>ข้อมูลร้านค้า</span>
+        </button>
+        <button class="nav-item" data-view="view-products">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          <span>ข้อมูลสินค้า</span>
+        </button>
+
+        <div class="nav-category" style="margin-top: 1.5rem;">ACCOUNT</div>
+        <button class="nav-item" data-view="view-users">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>จัดการผู้ใช้</span>
+        </button>
+        <button class="nav-item" id="logout-btn">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+           <span class="logout-text">ออกจากระบบ</span>
+        </button>
+      </nav>
+      
+      <!-- Footer Profile -->
+      <div class="sidebar-footer">
+        <div class="profile-wrapper">
+          <div class="profile-avatar" id="profile-avatar-text">A</div>
+          <div class="profile-info">
+            <span class="profile-name" id="profile-email" title="Username">User</span>
+            <span class="profile-role" id="profile-role">ระบบหลังบ้าน</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      
+      <!-- Dashboard View -->
+      <div id="view-dashboard" class="view-section active">
+        <div class="app-container">
+          <!-- Header Section -->
+          <header class="dashboard-header">
+            <div class="header-title">
+              <h1>สรุปออเดอร์รวม</h1>
+              <p class="subtitle">อัพเดทจาก Google Sheet</p>
+            </div>
+            
+            <!-- Controls -->
+            <div class="controls-wrapper">
+              <div class="controls-top">
+                
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <div class="control-group toggle-group" style="margin-bottom: 0;">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="active-only-toggle">
+                      <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label">แสดงเฉพาะสินค้าที่มีออเดอร์</span>
+                  </div>
+                  
+                  <div class="control-group toggle-group" style="margin-bottom: 0;">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="stock-only-toggle">
+                      <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label">แสดงเฉพาะสินค้าที่มีสต๊อก</span>
+                  </div>
+                </div>
+                
+                <div class="control-group">
+                  <label>หมวดหมู่ (Category)</label>
+                  <div class="multi-select-container" id="category-multi-select">
+                    <div class="multi-select-header" id="category-filter-header">
+                      ทั้งหมด (All Categories)
+                    </div>
+                    <div class="multi-select-options-wrapper" id="category-filter-dropdown">
+                      <div class="category-search-wrapper">
+                        <input type="text" id="category-search" placeholder="ค้นหาหมวดหมู่...">
+                      </div>
+                      <div class="multi-select-options" id="category-filter-options">
+                        <!-- Dynamically populated by JS -->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="control-group" style="margin-left: auto;">
+                  <button id="presentation-btn" class="btn-primary">Presentation Mode</button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <!-- Main Dashboard Area -->
+          <main>
+            <div id="loading-spinner" class="loading">Loading data...</div>
+            <div id="dashboard-container" class="dashboard-grid">
+              <!-- Tables will be dynamically injected here by JS -->
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <!-- Store Info View -->
+      <div id="view-store" class="view-section" style="display: none;">
+        <div class="app-container">
+          
+          <!-- Store List Sub-view -->
+          <div id="view-store-list">
+            <header class="dashboard-header">
+              <div class="header-title">
+                <h1>ข้อมูลร้านค้า</h1>
+                <p class="subtitle">รายชื่อร้านค้า</p>
+              </div>
+              <div class="controls-wrapper">
+                <div class="controls-top">
+                  <div class="control-group" style="margin-left: auto;">
+                    <label>ค้นหาร้านค้า (Search Store)</label>
+                    <input type="text" id="store-search" placeholder="พิมพ์ชื่อร้านค้าที่ต้องการค้นหา..." style="max-width: 300px; width: 100%;">
+                  </div>
+                </div>
+              </div>
+            </header>
+            <main>
+              <div id="store-list-container" class="dashboard-grid store-grid">
+                <!-- Store cards dynamically injected -->
+              </div>
+            </main>
+          </div>
+
+          <!-- Store Detail Sub-view -->
+          <div id="view-store-detail" style="display: none;">
+            <div style="display: flex; justify-content: flex-start; align-items: center; padding: 0.5rem 0 1rem 0; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+              <button id="back-to-store-list" style="background: none; border: none; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 500; transition: color 0.2s; padding: 0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                ย้อนกลับ
+              </button>
+            </div>
+            <header class="dashboard-header" style="margin-bottom: 1.5rem;">
+              <div class="header-title">
+                <h1 id="store-detail-title">ชื่อร้านค้า</h1>
+              </div>
+            </header>
+            <main>
+              <div id="store-detail-container">
+                <!-- Detailed table dynamically injected -->
+              </div>
+            </main>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Product Info View -->
+      <div id="view-products" class="view-section" style="display: none;">
+        <div class="app-container">
+          <header id="product-dashboard-header" class="dashboard-header">
+            <div class="header-title">
+              <h1>ข้อมูลสินค้า</h1>
+              <p class="subtitle">รายละเอียดและคุณสมบัติสินค้า</p>
+            </div>
+            <div class="controls-wrapper">
+              <div class="controls-top" style="display: flex; gap: 1.5rem; align-items: flex-end; margin-left: auto;">
+                <div class="control-group" style="margin-bottom: 0; display: flex; flex-direction: column; gap: 8px;">
+                  <label style="color: var(--text-secondary); font-size: 0.875rem; font-weight: 500;">ค้นหาสินค้า (Search Product)</label>
+                  <input type="text" id="product-search-input" placeholder="ค้นหารหัส หรือชื่อสินค้า..." style="max-width: 300px; width: 100%;">
+                </div>
+                <div class="product-action-buttons" style="display: flex; gap: 8px;">
+                  <input type="file" id="excel-upload-input" accept=".xlsx, .xls, .csv" style="display: none;">
+                  <button id="import-excel-btn" class="btn-primary" style="min-height: 38px; background-color: #10b981; border-color: #10b981;">นำเข้าข้อมูลจาก Excel</button>
+                  <button id="add-product-btn" class="btn-primary" style="min-height: 38px;">+ จัดการข้อมูลสินค้า</button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main>
+            <!-- Catalog List View (Page 1) -->
+            <div id="product-list-view">
+              <div id="product-catalog-container" class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+                <!-- Small Cards injected here -->
+              </div>
+            </div>
+
+            <!-- Catalog Detail View (Page 2) -->
+            <div id="product-detail-view" style="display: none;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0 1rem 0; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+                <button id="back-to-products-btn" style="background: none; border: none; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 500; transition: color 0.2s; padding: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  กลับรายการสินค้า
+                </button>
+                <div style="color: #94a3b8; font-size: 0.95rem; font-weight: 500;">
+                  ข้อมูลสินค้า <span style="margin: 0 4px;">></span> <span id="breadcrumb-product-code" style="color: #475569;">T101</span>
+                </div>
+              </div>
+              <div id="product-detail-container">
+                <!-- Full product detail injected here -->
+              </div>
+            </div>
+
+            <!-- Admin Form (Hidden by default) -->
+            <div id="product-admin-form-container" style="display: none; background-color: var(--surface-color); padding: 2rem; border-radius: 12px; margin-top: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+              <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">เพิ่ม/แก้ไข ข้อมูลสินค้า</h3>
+              <form id="product-admin-form" style="display: grid; gap: 1.5rem;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">รหัสสินค้า (เช่น T101) <span style="color: red;">*</span></label>
+                    <input type="text" id="product-code-input" class="search-input" style="width: 100%; padding: 0.75rem;" required>
+                  </div>
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">ชื่อสินค้า (เช่น โต๊ะพับเหล็ก 2.5 ฟุต) <span style="color: red;">*</span></label>
+                    <input type="text" id="product-name-input" class="search-input" style="width: 100%; padding: 0.75rem;" required>
+                  </div>
+                </div>
+
+
+
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">สีที่มีจำหน่าย (คั่นด้วยลูกน้ำ เช่น แดง, น้ำเงิน, ขาว)</label>
+                  <input type="text" id="product-colors-input" class="search-input" style="width: 100%; padding: 0.75rem;" placeholder="เช่น แดง, น้ำเงิน, ขาว">
+                </div>
+
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">ข้อมูลผลิตภัณฑ์ (แต่ละบรรทัดคือ 1 ข้อย่อย)</label>
+                  <textarea id="product-features-input" class="search-input" style="width: 100%; padding: 0.75rem; min-height: 150px; resize: vertical;" placeholder="กรอกคุณสมบัติสินค้า กด Enter เพื่อขึ้นข้อใหม่..."></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">รูปภาพสินค้า (อัปโหลดอัตโนมัติ)</label>
+                  <input type="file" id="product-image-input" accept="image/png, image/jpeg" style="display: block; width: 100%; padding: 0.5rem 0;">
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                  <button type="submit" id="save-product-btn" class="btn-primary" style="padding: 0.75rem 2rem;">บันทึกข้อมูล</button>
+                  <button type="button" id="cancel-product-btn" style="padding: 0.75rem 2rem; background: none; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;">ยกเลิก</button>
+                </div>
+                <div id="product-save-msg" style="margin-top: 0.5rem; font-size: 0.9rem; font-weight: 500;"></div>
+              </form>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <!-- Inventory Adjustment View -->
+      <div id="view-inventory" class="view-section" style="display: none;">
+        <div class="app-container">
+          <header id="inventory-header" class="dashboard-header">
+            <div class="header-title">
+              <h1>ใบปรับปรุงยอดสินค้า</h1>
+              <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">บันทึกเพิ่ม/อัพเดทจำนวนสต๊อกปัจจุบัน</p>
+            </div>
+            <div class="controls-wrapper">
+              <div class="controls-top" style="display: flex; gap: 1.5rem; align-items: flex-end; justify-content: space-between; width: 100%;">
+                <div class="search-container" style="flex: 1; max-width: 400px; position: relative;">
+                  <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="inv-search-input" class="search-input" placeholder="ค้นหาเลขที่เอกสาร / ชื่อผู้บันทึก" style="padding-left: 2.5rem; width: 100%;">
+                </div>
+                <div class="product-action-buttons" style="display: flex; gap: 8px;">
+                  <button id="delete-selected-inv-btn" class="btn-primary" style="min-height: 38px; background-color: #ef4444; border-color: #ef4444; display: none;">ลบที่เลือก (0)</button>
+                  <button id="add-inventory-btn" class="btn-primary" style="min-height: 38px;">+ เพิ่มข้อมูล</button>
+                  <button id="report-inventory-btn" class="btn-primary" style="min-height: 38px; background-color: #8b5cf6; border-color: #8b5cf6;">รายงาน</button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main>
+            <!-- List View -->
+            <div id="inventory-list-view">
+              <div class="category-card" style="grid-column: 1 / -1; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
+                <div class="card-body" style="padding: 0;">
+                  <div class="table-container">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 50px; text-align: left; padding-left: 1rem;"><input type="checkbox" id="inv-select-all"></th>
+                          <th style="text-align: left;">ลำดับ</th>
+                          <th style="text-align: left;">เลขที่เอกสาร</th>
+                          <th style="text-align: left;">วันที่เอกสาร</th>
+                          <th style="text-align: left;">ผู้บันทึก</th>
+                          <th style="text-align: left;">หมายเหตุ</th>
+                          <th style="text-align: left;">จัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody id="inventory-table-body">
+                        <!-- Rendered by JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form View -->
+            <div id="inventory-form-view" style="display: none;">
+              <div style="display: flex; justify-content: flex-start; align-items: center; padding: 0.5rem 0 1rem 0; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+                <button id="back-to-inv-list-form" style="background: none; border: none; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 500; transition: color 0.2s; padding: 0;" onclick="document.getElementById('cancel-inventory-btn').click()">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  ย้อนกลับ
+                </button>
+              </div>
+              <div style="background-color: var(--surface-color); padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 1.25rem;">ใบปรับปรุงยอดสินค้า</h3>
+                <button id="cancel-inventory-btn" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.5rem;">&times;</button>
+              </div>
+              <form id="inventory-form">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">เลขอ้างอิงเอกสาร <span style="color: red;">*</span></label>
+                    <input type="text" id="inv-doc-no" class="search-input" style="width: 100%; padding: 0.75rem; background-color: #f1f5f9;" placeholder="ระบบจะสร้างให้อัตโนมัติ" readonly required>
+                  </div>
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">วันที่ <span style="color: red;">*</span></label>
+                    <input type="date" id="inv-doc-date" class="search-input" style="width: 100%; padding: 0.75rem;" required>
+                  </div>
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">ชื่อผู้ลงบันทึก <span style="color: red;">*</span></label>
+                    <input type="text" id="inv-doc-user" class="search-input" style="width: 100%; padding: 0.75rem;" placeholder="เช่น TM001 สมชาย" required>
+                  </div>
+                  <div class="form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">หมายเหตุ</label>
+                    <input type="text" id="inv-doc-remark" class="search-input" style="width: 100%; padding: 0.75rem;">
+                  </div>
+                </div>
+
+                <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-bottom: 1.5rem;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h4 style="font-size: 1.1rem;">รายการสินค้า</h4>
+                    <button type="button" id="inv-add-row-btn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem; background-color: #6366f1; border-color: #6366f1;">+ เพิ่มแถว</button>
+                  </div>
+                  <div class="table-container" style="overflow-x: auto;">
+                    <table class="data-table" id="inv-items-table" style="min-width: 1000px;">
+                      <thead>
+                        <tr>
+                          <th style="width: 5%; padding: 0.75rem 0.5rem;">ลำดับ</th>
+                          <th style="width: 10%; padding: 0.75rem 0.5rem;">รหัสสินค้า</th>
+                          <th style="width: 20%; padding: 0.75rem 0.5rem;">ชื่อสินค้า</th>
+                          <th style="width: 10%; padding: 0.75rem 0.5rem;">สี</th>
+                          <th style="width: 7%; padding: 0.75rem 0.5rem;">รับ</th>
+                          <th style="width: 7%; padding: 0.75rem 0.5rem;">จ่าย</th>
+                          <th style="width: 13%; padding: 0.75rem 0.5rem;">Lot</th>
+                          <th style="width: 15%; padding: 0.75rem 0.5rem;">พนักงานแพ็คสินค้า</th>
+                          <th style="width: 5%; padding: 0.75rem 0.5rem; text-align: center;">ลบ</th>
+                        </tr>
+                      </thead>
+                      <tbody id="inv-items-body">
+                        <!-- Rows dynamically generated -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                  <button type="button" id="close-inventory-btn" style="padding: 0.75rem 2rem; background: none; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;">ยกเลิก</button>
+                  <button type="submit" id="save-inventory-btn" class="btn-primary" style="padding: 0.75rem 2rem;">บันทึก</button>
+                </div>
+              </form>
+              </div>
+            </div>
+
+            <!-- Report View -->
+            <div id="inventory-report-view" style="display: none;">
+              <div style="display: flex; justify-content: flex-start; align-items: center; padding: 0.5rem 0 1rem 0; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0;">
+                <button id="back-to-inv-list-report" style="background: none; border: none; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 500; transition: color 0.2s; padding: 0;" onclick="document.getElementById('back-from-report-btn').click()">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  ย้อนกลับ
+                </button>
+              </div>
+              <div class="category-card" style="padding: 2rem; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                  <h3 style="font-size: 1.25rem;">รายงานใบปรับปรุงยอดสินค้า</h3>
+                  <div>
+                    <button id="print-report-btn" class="btn-primary" style="padding: 0.5rem 1.5rem; background-color: #10b981; border-color: #10b981; display: none; margin-right: 1rem;">พิมพ์รายงาน (Print)</button>
+                    <button id="back-from-report-btn" class="btn-primary" style="display: none; background-color: #64748b; border-color: #64748b;">ย้อนกลับ</button>
+                  </div>
+                </div>
+                
+                <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
+                  <div class="form-group" style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">วันที่เริ่มต้น</label>
+                    <input type="date" id="rep-start-date" class="search-input" style="width: 100%; padding: 0.75rem;">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">วันที่สิ้นสุด</label>
+                    <input type="date" id="rep-end-date" class="search-input" style="width: 100%; padding: 0.75rem;">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">สินค้า (Product)</label>
+                    <div class="multi-select-container" id="rep-product-multi-select">
+                      <div class="multi-select-header" id="rep-product-header" style="padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; background: white;">
+                        ทั้งหมด (All)
+                      </div>
+                      <div class="multi-select-options-wrapper" id="rep-product-dropdown">
+                        <div class="category-search-wrapper">
+                          <input type="text" id="rep-product-search" placeholder="ค้นหาสินค้า...">
+                        </div>
+                        <div class="multi-select-options" id="rep-product-options">
+                          <!-- Dynamically populated by JS -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">เงื่อนไขเพิ่มเติม</label>
+                    <div class="multi-select-container" id="rep-condition-multi-select">
+                      <div class="multi-select-header" id="rep-condition-header" style="padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; background: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        เลือกเงื่อนไข...
+                      </div>
+                      <div class="multi-select-options-wrapper" id="rep-condition-dropdown">
+                        <div class="multi-select-options" id="rep-condition-options">
+                          <label class="multi-select-option" style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer;">
+                            <input type="checkbox" id="chk-hide-cancelled" checked style="margin-right: 8px;"> ไม่แสดงรายการที่ลบ
+                          </label>
+                          <label class="multi-select-option" style="display: flex; align-items: center; padding: 8px 12px; cursor: pointer;">
+                            <input type="checkbox" id="chk-hide-packer" style="margin-right: 8px;"> ไม่แสดงชื่อพนักงานแพ็คสินค้า
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 1.5rem; margin-bottom: 2rem;">
+                  <label><input type="radio" name="rep_group" value="Date" checked> ดูแบบสรุปตามวันที่</label>
+                  <label><input type="radio" name="rep_group" value="Product"> ดูแบบสรุปตามสินค้า</label>
+                  <label><input type="radio" name="rep_group" value="Lot"> ดูแบบสรุปตาม Lot</label>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                  <button id="generate-report-btn" class="btn-primary" style="padding: 0.75rem 2rem; background-color: #a855f7; border-color: #a855f7; flex: 1;">ค้นหาเอกสาร</button>
+                </div>
+              </div>
+
+              <div id="report-results-container" style="margin-top: 2rem;">
+                <!-- Generated report table goes here -->
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <!-- User Management View -->
+      <div id="view-users" class="view-section" style="display: none;">
+        <div class="app-container">
+          <header class="dashboard-header">
+            <div class="header-title">
+              <h1>จัดการผู้ใช้</h1>
+              <p class="subtitle">เพิ่ม/ลบ สิทธิ์พนักงาน</p>
+            </div>
+          </header>
+          
+          <div class="content-wrapper">
+            <div class="grid-layout">
+              <!-- Add User Card -->
+              <div class="category-card" style="grid-column: 1 / -1; border-top: 4px solid var(--primary-color); padding: 1.5rem 2rem; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 2rem;">
+                <div class="card-header" style="padding: 0 0 1.5rem 0; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                  <h3 style="font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary-color);"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+                    เพิ่มพนักงานใหม่
+                  </h3>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;">ระบุชื่อผู้ใช้งาน รหัสผ่าน และกำหนดสิทธิ์ให้พนักงานเพื่อเข้าใช้งานระบบ</p>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                  <form id="create-user-form" class="user-form-grid">
+                    <div class="form-group">
+                      <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">ชื่อผู้ใช้งาน <span style="color: #ef4444;">*</span></label>
+                      <input type="text" id="new-user-username" required class="search-input" style="width: 100%; padding: 0.65rem 1rem; border-radius: 8px;" placeholder="เช่น somchai, john">
+                    </div>
+                    <div class="form-group">
+                      <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">รหัสผ่าน <span style="color: #ef4444;">*</span></label>
+                      <div style="position: relative; display: flex; align-items: center;">
+                        <input type="password" id="new-user-password" class="search-input" style="width: 100%; padding: 0.65rem 2.75rem 0.65rem 1rem; border-radius: 8px;" placeholder="อย่างน้อย 6 ตัวอักษร">
+                        <button type="button" id="toggle-new-user-password" style="position: absolute; right: 0.75rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; transition: color 0.2s;" title="แสดง/ซ่อนรหัสผ่าน">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">ระดับสิทธิ์ (Role) <span style="color: #ef4444;">*</span></label>
+                      <select id="new-user-role" class="search-input" style="width: 100%; padding: 0.65rem 1rem; border-radius: 8px; cursor: pointer;" required>
+                        <option value="employee">Employee (พนักงาน)</option>
+                        <option value="sales">Sales (พนักงานฝ่ายขาย)</option>
+                        <option value="admin">Admin (ผู้ดูแลระบบ)</option>
+                      </select>
+                    </div>
+                    <button type="submit" class="btn-primary" id="save-role-btn" style="height: 42px; padding: 0 1.5rem; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      บันทึกผู้ใช้
+                    </button>
+                  </form>
+                  <p id="user-msg" style="margin-top: 1rem; font-size: 0.875rem; font-weight: 500; text-align: center;"></p>
+                </div>
+              </div>
+              
+              <!-- Users List Card -->
+              <div class="category-card" style="grid-column: 1 / -1; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden;">
+                <div class="card-header" style="padding: 1.5rem 2rem;">
+                  <h3>รายชื่อผู้ใช้งานในระบบ</h3>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                  <div class="table-container">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 40%; text-align: left;">ชื่อผู้ใช้งาน</th>
+                          <th style="width: 40%; text-align: left;">ระดับสิทธิ์</th>
+                          <th style="width: 20%; text-align: center;">การจัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody id="users-table-body">
+                        <!-- Rendered by JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div id="view-settings" class="view-section" style="display: none;">
+        <div class="app-container">
+      <header class="dashboard-header">
+        <div class="header-title">
+          <h1>ตั้งค่าระบบ</h1>
+          <p class="subtitle">จัดการข้อมูลส่วนตัวและการตั้งค่า</p>
+        </div>
+      </header>
+      
+      <div class="content-wrapper">
+        <div class="category-card" style="border-top: 4px solid var(--primary-color); padding: 2rem; border-radius: 12px; background-color: var(--surface-color); box-shadow: 0 4px 20px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto;">
+          <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">ข้อมูลบัญชีผู้ใช้</h3>
+          
+          <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 2rem; padding: 1.5rem; background-color: var(--bg-color); border-radius: 12px;">
+            <div id="settings-profile-avatar" class="profile-avatar" style="width: 64px; height: 64px; font-size: 1.5rem; flex-shrink: 0;">U</div>
+            <div style="overflow: hidden;">
+              <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 4px;">ชื่อผู้ใช้งาน</div>
+              <div id="settings-profile-email" style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Username</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.85rem; color: var(--text-secondary);">ระดับสิทธิ์:</span>
+                <span id="settings-profile-role" style="background-color: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 6px; font-weight: 600; font-size: 0.85rem;">Role</span>
+              </div>
+            </div>
+          </div>
+          
+
+        </div>
+      </div>
+    </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Back to Top Button -->
+  <button id="back-to-top-btn" title="กลับขึ้นด้านบน" style="display: none; position: fixed; bottom: 30px; right: 30px; z-index: 999; background-color: var(--highlight-bg); color: var(--accent-color); border: 2px solid var(--accent-color); border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; align-items: center; justify-content: center; transition: all 0.3s; opacity: 0;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+  </button>
+
+  <!-- App Logic & External Libs -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -3,8 +3,6 @@ import { escapeHTML } from "../utils/helpers.js";
 import { listenForUsers, createNewUserWithCloudFunction, deleteUserFromAuth, updateUserRole, updateUsername, toUsername } from "../services/auth.js";
 import { state } from "../store/state.js";
 
-let isInitialized = false;
-
 export function initUserManagement() {
   if (state.currentUser?.role !== 'admin') return;
   
@@ -12,8 +10,6 @@ export function initUserManagement() {
   listenForUsers((users) => {
     renderUsersTable(users);
   });
-  
-  if (isInitialized) return;
   
   // Handle role creation/update
   if (DOM.createUserForm) {
@@ -70,8 +66,6 @@ export function initUserManagement() {
       }
     });
   }
-  
-  isInitialized = true;
 }
 
 function renderUsersTable(users) {

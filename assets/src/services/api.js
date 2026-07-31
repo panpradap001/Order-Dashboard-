@@ -5,14 +5,10 @@ import { DOM } from "../utils/dom.js";
 import { updateCategoryDropdown, renderDashboard } from "../views/dashboardView.js";
 import { renderStoreList, renderStoreDetail } from "../views/storeView.js";
 
-let ordersUnsubscribe = null;
 export function fetchData() {
-  if (ordersUnsubscribe) {
-    ordersUnsubscribe();
-  }
   const ordersRef = ref(database, 'orders/orders');
   
-  ordersUnsubscribe = onValue(ordersRef, (snapshot) => {
+  onValue(ordersRef, (snapshot) => {
     const data = snapshot.val();
     if (data) {
       let fetchedData = Array.isArray(data) ? data : Object.values(data);
@@ -39,14 +35,10 @@ export function fetchData() {
   });
 }
 
-let customerOrdersUnsubscribe = null;
 export function fetchCustomerOrders() {
-  if (customerOrdersUnsubscribe) {
-    customerOrdersUnsubscribe();
-  }
   const customerOrdersRef = ref(database, 'orders/customerOrders');
   
-  customerOrdersUnsubscribe = onValue(customerOrdersRef, (snapshot) => {
+  onValue(customerOrdersRef, (snapshot) => {
     const data = snapshot.val();
     if (data) {
       let fetchedData = Array.isArray(data) ? data : Object.values(data);
@@ -62,13 +54,9 @@ export function fetchCustomerOrders() {
   });
 }
 
-let invUnsubscribe = null;
 export function fetchInventoryAdjustments() {
-  if (invUnsubscribe) {
-    invUnsubscribe();
-  }
   const invRef = ref(database, 'inventory_adjustments');
-  invUnsubscribe = onValue(invRef, (snapshot) => {
+  onValue(invRef, (snapshot) => {
     const data = snapshot.val();
     if (data) {
       state.inventoryAdjustments = Array.isArray(data) ? data : Object.values(data);
